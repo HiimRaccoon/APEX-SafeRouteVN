@@ -44,7 +44,7 @@ def verify_snapshot(root, config):
             "scenariosRoot": str((Path(root) / "scenarios").resolve())}
 
 
-def download_url(config, repo=None):
+def download_url(config, repo=None, *, filename=None):
     repo = repo or config.get("repoId")
     if not repo:
         raise ValueError("Hugging Face dataset is not configured yet. The maintainer must set "
@@ -52,7 +52,7 @@ def download_url(config, repo=None):
     if not re.fullmatch(r"[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+", repo):
         raise ValueError("Expected a Hugging Face dataset ID: OWNER/DATASET")
     return (f"https://huggingface.co/datasets/{repo}/resolve/"
-            f"{quote(config['revision'], safe='')}/{quote(config['filename'], safe='')}")
+            f"{quote(config['revision'], safe='')}/{quote(filename or config['filename'], safe='/')}")
 
 
 def download(url, target, progress=print):
@@ -80,7 +80,7 @@ def download(url, target, progress=print):
                 raise
             if attempt == 2:
                 raise
-            progress("Download interrupted; restarting download...")
+            progress("Download interrupted; restarting the current file...")
             time.sleep(attempt + 1)
 
 
@@ -126,9 +126,78 @@ def extract_snapshot(archive, stage, config):
     return entries
 
 
+def file_matches(path, item):
+    return (path.is_file() and path.stat().st_size == item["bytes"]
+            and file_hash(path) == item["sha256"])
+
+
+def snapshot_entries(config):
+    # Hash normalized line endings so Git's Windows checkout conversion is harmless.
+    encoded = Path(__file__).with_name("snapshot_files.json").read_bytes().replace(b"\r\n", b"\n")
+    if hashlib.sha256(encoded).hexdigest() != config["filesInventorySha256"]:
+        raise ValueError("Snapshot inventory checksum mismatch; restore the matching code/config")
+    inventory = json.loads(encoded)
+    if (inventory.get("schemaVersion") != "snapshot-file-inventory/1"
+            or inventory.get("suiteId") != config["suiteId"]
+            or inventory.get("suiteVersion") != config["suiteVersion"]):
+        raise ValueError("Snapshot inventory belongs to another suite/version")
+    entries = inventory["files"]
+    names = set()
+    for item in entries:
+        name = item["path"]
+        if (not data_path(name, config) or name.casefold() in names
+                or type(item["bytes"]) is not int or item["bytes"] < 0
+                or not re.fullmatch(r"[a-f0-9]{64}", item["sha256"])):
+            raise ValueError(f"Invalid snapshot inventory entry: {name}")
+        names.add(name.casefold())
+    catalog = f"scenarios/manifests/{config['suiteId']}.json"
+    if not entries or catalog.casefold() not in names:
+        raise ValueError("Snapshot inventory has no scenario catalog")
+    return sorted(entries, key=lambda item: (item["path"] == catalog,
+                                            item["path"].endswith("/manifest.json"), item["path"]))
+
+
+def install_files(root, config, *, repo=None, progress=print):
+    """Download only missing/corrupt data files; completed files survive a retry."""
+    entries = snapshot_entries(config)
+    # Preflight every path before any file is written, including symlinked parents.
+    cache = root / "scenarios/cached_context"
+    if not cache.resolve().is_relative_to(root):
+        raise ValueError("Snapshot directory resolves outside the project")
+    for item in entries:
+        target = root / item["path"]
+        if not target.resolve().is_relative_to(root) or target.is_symlink():
+            raise ValueError(f"Snapshot destination escapes project or is a symlink: {target}")
+    urls = {item["path"]: download_url(config, repo, filename=item["path"]) for item in entries}
+    with exclusive_lock(cache):
+        with tempfile.TemporaryDirectory(prefix=".snapshot-", dir=cache) as temporary:
+            partial = Path(temporary) / "current-file.part"
+            downloaded, reused = 0, 0
+            for index, item in enumerate(entries, start=1):
+                target = root / item["path"]
+                if file_matches(target, item):
+                    reused += 1
+                    continue
+                progress(f"[{index}/{len(entries)}] Downloading {item['path']}")
+                download(urls[item["path"]], partial, progress)
+                if not file_matches(partial, item):
+                    raise ValueError(f"Snapshot file checksum/size mismatch: {item['path']}; "
+                                     "existing destination was not replaced")
+                target.parent.mkdir(parents=True, exist_ok=True)
+                os.replace(partial, target)
+                downloaded += 1
+            progress(f"Files downloaded: {downloaded}; reused: {reused}. Verifying all nine scenarios...")
+            result = verify_snapshot(root, config)
+            if downloaded == 0:
+                progress("Pinned snapshot is already complete; no download needed.")
+            return result
+
+
 def install_snapshot(root, config, *, repo=None, archive=None, progress=print):
     root = Path(root).resolve()
     progress(f"Project: {root}")
+    if archive is None:
+        return install_files(root, config, repo=repo, progress=progress)
     try:
         result = verify_snapshot(root, config)
     except (OSError, ValueError, KeyError):
@@ -136,18 +205,12 @@ def install_snapshot(root, config, *, repo=None, archive=None, progress=print):
     else:
         progress("Pinned snapshot is already complete; no download needed.")
         return result
-    # Resolve source before creating any temporary directories.
-    url = download_url(config, repo) if archive is None else None
     cache = root / "scenarios/cached_context"
     if not cache.resolve().is_relative_to(root):
         raise ValueError("Snapshot directory resolves outside the project")
     with exclusive_lock(cache):
         with tempfile.TemporaryDirectory(prefix=".snapshot-", dir=cache) as temporary:
             stage = Path(temporary)
-            if archive is None:
-                archive = stage / "download.zip"
-                progress("Downloading the pinned Hugging Face snapshot...")
-                download(url, archive, progress)
             progress("Checking SHA-256 and extracting snapshot data...")
             entries = extract_snapshot(Path(archive), stage, config)
             progress("Verifying all nine scenarios before installing...")

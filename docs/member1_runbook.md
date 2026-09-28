@@ -2,7 +2,7 @@
 
 ## Bắt đầu tại đây: tải snapshot từ Hugging Face tự động
 
-Code được chia sẻ qua GitHub; dữ liệu lớn dự kiến lưu trong **Hugging Face Dataset** `nguyenviet21/saferoutevn-snapshots`. Script đã cấu hình địa chỉ này trong `geo_data/snapshot_source.json`, đồng thời khóa SHA-256 của gói và phiên bản suite. **Member 1 cần hoàn thành bước upload bên dưới trước khi thành viên khác tải lần đầu.** Trang tài khoản `huggingface.co/nguyenviet21` tự nó chưa phải kho dataset.
+Code được chia sẻ qua GitHub; dữ liệu lớn lưu dưới dạng **file/thư mục, không cần ZIP**, trong Hugging Face Dataset `nguyenviet21/saferoutevn-snapshots`. Script dùng địa chỉ trong `geo_data/snapshot_source.json` và danh sách **94 file kèm SHA-256** trong `geo_data/snapshot_files.json`. **Member 1 cần hoàn thành bước upload bên dưới trước khi thành viên khác tải lần đầu.** Trang tài khoản `huggingface.co/nguyenviet21` tự nó chưa phải kho dataset.
 
 ### Member 2/3/4: cài môi trường rồi chạy một lệnh tải
 
@@ -34,7 +34,9 @@ Script lấy gốc dự án từ **vị trí của chính `geo_data/download_sna
       qa/
 ```
 
-Gói tải khoảng **295 MB**, dữ liệu giải nén khoảng **2,65 GB**; nên để trống khoảng **4 GB** khi cài mới. Script kiểm SHA-256, giải nén vào vùng tạm, xác minh suite trước khi cài và kiểm tra lại sau khi cài. Chỉ lấy dữ liệu thuộc ba nhánh `scenarios/` trên từ ZIP; code, tài liệu và README trong dự án không bị ghi đè. Chạy lại sẽ kiểm tra bản hiện có và bỏ qua tải nếu đúng phiên bản, đủ dữ liệu. Nếu bản tải/cài bị gián đoạn hoặc snapshot thiếu/hỏng, chạy lại cùng lệnh để cài lại những file cần thiết; tải mạng bị gián đoạn sẽ bắt đầu lại ZIP. Dừng solver/backend đang đọc snapshot trước khi sửa một bản cài hỏng.
+Script tải trực tiếp **94 file, tổng khoảng 2,65 GB** của bộ `thu-duc-binh-thanh-v1`; nên để trống khoảng **4 GB** khi cài mới. Chỉ lấy ba nhánh `scenarios/` trên, dù dataset có cả PBF, graph và các run cũ. Mỗi file được tải vào vùng tạm, kiểm kích thước/SHA-256 rồi mới thay file đích; các manifest và catalog được cài sau dữ liệu. Cuối cùng script xác minh toàn bộ suite. Code, tài liệu và README trong dự án không bị ghi đè.
+
+Chạy lại sẽ kiểm checksum từng file, bỏ qua file đã đúng và chỉ tải file thiếu/hỏng. Nếu mạng gián đoạn, các file đã tải xong được giữ lại; chỉ file đang tải phải bắt đầu lại. Không có bước tải/giải nén ZIP trong luồng mặc định. Dừng solver/backend đang đọc snapshot trước khi sửa một bản cài hỏng; chỉ dùng snapshot sau khi có kết quả `verified=true`.
 
 Kết quả thành công có **`verified=true`, `scenarios=9`** và đường dẫn `scenariosRoot` trên máy của người chạy. `integrated=false` vẫn có nghĩa là chưa chứng nhận tích hợp solver/backend. Tiếp tục phần [Member 2 chạy S0](#receiving) bên dưới. Muốn kiểm tra lại độc lập từ gốc dự án:
 
@@ -42,24 +44,35 @@ Kết quả thành công có **`verified=true`, `scenarios=9`** và đường d�
 .\.venv\Scripts\python.exe -m geo_data.cli verify-scenarios --scenarios-root scenarios --suite-id thu-duc-binh-thanh-v1
 ```
 
-Nếu đã nhận ZIP qua Drive/USB, dùng cùng cơ chế cài offline; tham số duy nhất cần chỉ ra là nơi đang lưu ZIP:
+Tùy chọn tương thích với bản bàn giao cũ: nếu đã nhận ZIP qua Drive/USB, vẫn có thể cài offline bằng `--archive`. Đây không phải cách tải mặc định từ Hugging Face:
 
 ```powershell
 .\.venv\Scripts\python.exe geo_data/download_snapshot.py --archive "duong-dan-den/SafeRouteVN-member1-tdbt-v1-replay.zip"
 ```
 
-### Member 1: đưa dữ liệu lên Hugging Face một lần
+### Member 1: upload nguyên thư mục dữ liệu lên Hugging Face
 
-1. Đăng nhập tài khoản `nguyenviet21`, mở [Create dataset](https://huggingface.co/new-dataset), tạo dataset tên **`saferoutevn-snapshots`**. Chọn Public nếu nhóm muốn tải không cần đăng nhập. Repo dự kiến: <https://huggingface.co/datasets/nguyenviet21/saferoutevn-snapshots>.
-2. Trong **Files and versions → Add file → Upload files**, upload trực tiếp vào gốc repo trên nhánh `main` các file `SafeRouteVN-member1-tdbt-v1-replay.zip`, `SHA256SUMS.txt` và `verification_report.json`. Trên máy Member 1, chúng nằm ở `D:\Apex-SafeRouteVN\shared\handoff-member1-tdbt-v1-20260928/`. Giữ nguyên tên và byte của ZIP đã kiểm chứng; không giải nén để upload và không nén lại.
-3. Commit upload. Khi file có mặt trên Hugging Face, lệnh tải ở trên sẽ hoạt động. Địa chỉ resolve đã được script tạo tự động; người nhận không cần nhập link, repo ID hay đường dẫn đích. Nếu chọn tên dataset khác, Member 1 cập nhật `repoId` trong `geo_data/snapshot_source.json` trước khi chia sẻ code. Có thể đặt `revision` thành commit SHA của lần upload để cố định nguồn; SHA-256 của ZIP luôn được kiểm dù dùng nhánh `main`.
-4. Đưa code mới, `geo_data/download_snapshot.py`, `geo_data/snapshot_source.json` và runbook này lên GitHub. Giữ README nguyên bản. `.gitignore` hiện đã loại dữ liệu trong `scenarios/cached_context/`; không commit ZIP hay `.venv` vào GitHub.
+Đăng nhập tài khoản `nguyenviet21`, mở [Create dataset](https://huggingface.co/new-dataset), tạo dataset tên **`saferoutevn-snapshots`** nếu chưa có. Chọn Public nếu nhóm muốn tải không cần đăng nhập. Repo: <https://huggingface.co/datasets/nguyenviet21/saferoutevn-snapshots>.
 
-SHA-256 gói v1: `91f4788aefc50e4f6e127586a6a28c405ed5e7df212d1baab5925ab3205633ee`.
+Trên máy Member 1, dùng môi trường upload riêng, không đổi dependency của dự án. Bộ phiên bản dưới đây đã kiểm tra CLI; `hf-tools` hiện có trên máy Member 1 nên có thể bỏ qua bước tạo/cài nếu CLI đã chạy được:
 
-Kiểm thử ngày 28/09/2026: **99 test đạt**, gồm 8 test downloader. Đã cài ZIP thật vào một dự án đổi tên, gọi script từ thư mục ngoài dự án: `verified=true`, `scenarios=9`, chạy lần hai không tải lại, README và code giữ nguyên. Chưa xác minh tải trực tiếp từ Hugging Face; cần upload gói lên repo trước.
+```powershell
+cd D:\Apex-SafeRouteVN
+py -3.12 -m venv hf-tools
+.\hf-tools\Scripts\python.exe -m pip install "huggingface_hub==1.16.1" "typer==0.20.0" "click==8.3.1" --timeout 120
+.\hf-tools\Scripts\hf.exe auth login
+.\hf-tools\Scripts\hf.exe upload nguyenviet21/saferoutevn-snapshots "D:\Apex-SafeRouteVN\SafeRouteVN\scenarios" scenarios --repo-type dataset
+```
 
-Nếu dataset là Private hoặc gated, mỗi người cần được cấp quyền rồi đặt biến môi trường `HF_TOKEN` bằng token đọc Hugging Face của họ trước khi chạy script. Không ghi token vào code/runbook. Lỗi 401/403/404 cần kiểm tra quyền, trạng thái upload và tên repo/file. Lỗi checksum cần lấy lại đúng ZIP v1; không sửa checksum để bỏ qua lỗi.
+Lệnh cuối upload **toàn bộ `scenarios/` khoảng 10,6 GB**, gồm dữ liệu nguồn và các run cũ, giữ nguyên byte/cấu trúc. Dùng thư mục nguồn đầy đủ `SafeRouteVN/scenarios`, không dùng `github-upload/scenarios` vì bản Git không chứa cached context. Trên Hub phải có `scenarios/cached_context/hcmc/member1-tdbt-v1/`, `scenarios/fixtures/thu-duc-binh-thanh-v1/` và `scenarios/manifests/thu-duc-binh-thanh-v1.json` đúng như cây trên. Không cần upload ZIP, `SHA256SUMS.txt` của ZIP hay công cụ `hf-tools`.
+
+Người nhận vẫn chỉ chạy downloader ở đầu tài liệu; repo ID và vị trí đích đã cấu hình sẵn. Hiện `revision` cố định tại commit **`e0ab1f32bd286318836f43912b8400708753bae8`**, đã kiểm tra có đủ 94 đường dẫn snapshot. Nếu chuyển repo hoặc phát hành snapshot mới, Member 1 cập nhật nguồn và các checksum/phiên bản tương ứng trước khi chia sẻ code. Không cần đổi revision chỉ vì upload thêm run khác lên `main`.
+
+Đưa `geo_data/download_snapshot.py`, `geo_data/snapshot_source.json`, **`geo_data/snapshot_files.json`**, tests và runbook này lên GitHub. Giữ README nguyên bản. `.gitignore` hiện đã loại dữ liệu trong `scenarios/cached_context/`; không commit dữ liệu lớn hay `.venv` vào GitHub. Các trường `filename`/`sha256` của ZIP trong config chỉ phục vụ `--archive` offline, không được dùng để tải từ Hub.
+
+Kiểm thử ngày 28/09/2026: **106 test đạt**, gồm 15 test downloader. Đã kiểm tra danh sách file trên Hugging Face và tải thật 3 file thiếu (khoảng 73 MB, gồm SQLite) vào một dự án đổi tên, gọi từ terminal ngoài dự án; 91 file đã đúng được dùng lại. Xác minh suite sau tải: `verified=true`, `scenarios=9`. README giữ nguyên.
+
+Nếu dataset là Private hoặc gated, mỗi người cần được cấp quyền rồi đặt biến môi trường `HF_TOKEN` bằng token đọc Hugging Face của họ trước khi chạy script. Không ghi token vào code/runbook. Lỗi 401/403/404 cần kiểm tra quyền, trạng thái upload và tên repo/file. Lỗi checksum cần upload lại đúng file snapshot v1; không sửa checksum để bỏ qua lỗi.
 
 Tài liệu Hugging Face: [tạo repository và upload file](https://huggingface.co/docs/hub/repositories-getting-started), [tải file từ Hub](https://huggingface.co/docs/huggingface_hub/guides/download).
 
@@ -71,7 +84,7 @@ Phạm vi giao hàng hiện tại: **TP. Thủ Đức cũ và quận Bình Thạ
 
 **Bộ bàn giao hiện tại:** suite `thu-duc-binh-thanh-v1`, run `cached_context/hcmc/member1-tdbt-v1`, epoch `2026-09-27T21:00:00+07:00`. Đã ghi nhận catalog và đủ 7 manifest stage hoàn thành, QA `checksPassed=true`, `suiteReady=true`. Người nhận chạy `verify-scenarios` bên dưới để xác minh bản tải xuống. Bộ `hcmc-v1`/`member1-run-v1` là bản cũ; các phần triển khai phía sau còn giữ ví dụ và kết quả lịch sử của bản đó.
 
-Trạng thái lịch sử đã ghi nhận: `member1-run-v1` có **800.406 cạnh routing/features, 38 vùng weather, đủ S0–S8**, `suiteReady=true`, QA `checksPassed=true`. Kiểm thử code gần nhất: **99 test đạt**. Review thành phố đã được tạo. Live đã công bố snapshot thời tiết 17:00 ngày 27/09/2026 lúc 17:08:12, `checksPassed=true`; kết quả này không khẳng định snapshot còn mới ở thời điểm đọc. Chưa ghi nhận gói handoff/consumer smoke trên dữ liệu thành phố tại lần kiểm tra gần nhất. Backend/solver và rà soát thực địa vẫn cần nghiệm thu; `integrated=false`.
+Trạng thái lịch sử đã ghi nhận: `member1-run-v1` có **800.406 cạnh routing/features, 38 vùng weather, đủ S0–S8**, `suiteReady=true`, QA `checksPassed=true`. Kiểm thử code gần nhất: **106 test đạt**. Review thành phố đã được tạo. Live đã công bố snapshot thời tiết 17:00 ngày 27/09/2026 lúc 17:08:12, `checksPassed=true`; kết quả này không khẳng định snapshot còn mới ở thời điểm đọc. Chưa ghi nhận gói handoff/consumer smoke trên dữ liệu thành phố tại lần kiểm tra gần nhất. Backend/solver và rà soát thực địa vẫn cần nghiệm thu; `integrated=false`.
 
 ## Mục lục
 
