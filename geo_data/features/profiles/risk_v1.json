@@ -1,0 +1,14 @@
+{
+  "riskModelVersion": "engineering-proxy/1",
+  "description": "Uncalibrated relative exposure for demo; not accident probability.",
+  "weights": {"roadFactor": 0.4, "timeFactor": 0.15, "weatherFactor": 0.3, "trafficFactor": 0.15},
+  "roadWeights": {"highway": 0.5, "width": 0.25, "surface": 0.25},
+  "highwayFactor": {"motorway": 0.8, "motorway_link": 0.7, "trunk": 0.7, "trunk_link": 0.65, "primary": 0.6, "primary_link": 0.55, "secondary": 0.5, "secondary_link": 0.5, "tertiary": 0.4, "tertiary_link": 0.4, "residential": 0.3, "living_street": 0.25, "unclassified": 0.45, "service": 0.35, "track": 0.7, "path": 0.7},
+  "surfaceFactor": {"asphalt": 0.1, "concrete": 0.15, "paved": 0.15, "paving_stones": 0.3, "unpaved": 0.7, "gravel": 0.7, "dirt": 0.8, "ground": 0.8, "sand": 0.9},
+  "missingFactor": 0.5,
+  "widthReferenceM": 6,
+  "rainReferenceMmPerHour": 10,
+  "windReferenceKph": 60,
+  "visibilityReferenceM": 5000,
+  "weatherDelayScale": 0.5
+}

@@ -1,0 +1,17 @@
+{
+  "profileVersion": "motorcycle-estimated/1",
+  "description": "Engineering assumptions for demo; not observed traffic or legal speed advice.",
+  "speedKphByHighway": {"motorway": 45, "motorway_link": 25, "trunk": 35, "trunk_link": 25, "primary": 30, "primary_link": 22, "secondary": 28, "secondary_link": 20, "tertiary": 25, "tertiary_link": 20, "unclassified": 22, "residential": 20, "living_street": 12, "service": 15, "track": 10, "path": 8, "footway": 6, "pedestrian": 6, "cycleway": 10, "road": 15},
+  "fallbackSpeedKph": 15,
+  "surfaceSpeedMultiplier": {"asphalt": 1, "concrete": 1, "paved": 1, "paving_stones": 0.8, "unpaved": 0.6, "gravel": 0.6, "dirt": 0.5, "ground": 0.5, "sand": 0.4},
+  "unknownSurfaceMultiplier": 0.8,
+  "timeBuckets": [
+    {"id": "night", "startHour": 0, "endHour": 6, "travelMultiplier": 1.0, "timeFactor": 0.7, "trafficFactor": 0.2},
+    {"id": "morning", "startHour": 6, "endHour": 7, "travelMultiplier": 1.15, "timeFactor": 0.2, "trafficFactor": 0.4},
+    {"id": "am-peak", "startHour": 7, "endHour": 9, "travelMultiplier": 1.5, "timeFactor": 0.3, "trafficFactor": 0.8},
+    {"id": "day", "startHour": 9, "endHour": 16, "travelMultiplier": 1.1, "timeFactor": 0.2, "trafficFactor": 0.4},
+    {"id": "pm-peak", "startHour": 16, "endHour": 19, "travelMultiplier": 1.6, "timeFactor": 0.4, "trafficFactor": 0.9},
+    {"id": "evening", "startHour": 19, "endHour": 22, "travelMultiplier": 1.1, "timeFactor": 0.6, "trafficFactor": 0.4},
+    {"id": "late", "startHour": 22, "endHour": 24, "travelMultiplier": 1.0, "timeFactor": 0.7, "trafficFactor": 0.2}
+  ]
+}

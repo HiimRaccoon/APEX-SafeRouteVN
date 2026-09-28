@@ -1,0 +1,12 @@
+{
+  "policyVersion": "motorcycle-preview/1",
+  "description": "Conservative engineering defaults for a graph preview; not verified road permissions.",
+  "defaultHighways": ["trunk", "trunk_link", "primary", "primary_link", "secondary", "secondary_link", "tertiary", "tertiary_link", "unclassified", "residential", "living_street", "service", "track"],
+  "explicitMotorAccessHighways": ["motorway", "motorway_link", "path", "footway", "pedestrian", "cycleway", "road"],
+  "allowedAccess": ["yes", "designated", "permissive"],
+  "passableBarriers": ["entrance", "toll_booth"],
+  "hardBarriers": ["block", "bollard", "fence", "wall", "stile", "turnstile", "kissing_gate", "jersey_barrier"],
+  "conditionalHandling": "exclude",
+  "unknownAccessHandling": "exclude",
+  "unknownBarrierHandling": "require-explicit-motor-access"
+}
