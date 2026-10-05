@@ -1,0 +1,138 @@
+import type { FixtureEvent, GeoJsonPolygon, Location, Order, ScenarioId, Vehicle } from "./scenario";
+
+export type EventStatus = "READY_TO_TRIGGER" | "TRIGGERED" | "EXPIRED";
+
+export interface DecisionEvent {
+  id: string;
+  sourceScenarioId: ScenarioId;
+  type: FixtureEvent["type"];
+  status: EventStatus;
+  fixtureEvent: FixtureEvent;
+}
+
+export interface DecisionState {
+  sessionId: string;
+  version: number;
+  scenarioId: ScenarioId;
+  orders: Order[];
+  vehicles: Vehicle[];
+  locations: Location[];
+  context: { rain: { polygon: GeoJsonPolygon; endsAt: string } | null };
+  events: DecisionEvent[];
+}
+
+export type PlanProfile = "FASTEST" | "BALANCED" | "SAFER";
+
+export interface PlanStop {
+  id: string;
+  kind: "DEPOT_PICKUP" | "DELIVERY";
+  orderIds: string[];
+  label: string;
+  location: { latitude: number; longitude: number };
+}
+
+export interface RouteSegment {
+  id: string;
+  fromStopId: string;
+  toStopId: string;
+  geometry: { type: "LineString"; coordinates: [number, number][] };
+  distanceKm: number;
+  durationMinutes: number;
+  relativeExposure?: number;
+  geometrySource?: "SCHEMATIC_DEMO" | "MEMBER2_SUPPLIED";
+}
+
+export interface SuppliedRouteAction {
+  kind: string;
+  order_id?: string;
+  node_id?: number;
+  edge_id?: string;
+  geometry?: [number, number][];
+  distance_m?: number;
+  exposure?: number;
+  load_after_kg?: number;
+  start_us?: number | string;
+  end_us?: number | string;
+}
+
+export interface VehiclePlan {
+  vehicleId: string;
+  orderedStops: PlanStop[];
+  routeSegments: RouteSegment[];
+  suppliedActions?: SuppliedRouteAction[];
+}
+
+export interface PlanMetrics {
+  distanceKm: number;
+  durationMinutes: number;
+  exposureScore: number;
+  onTimeRate: number | null;
+  fuelCostVnd: number;
+}
+
+export interface ImmutablePlanContent {
+  profile: PlanProfile;
+  vehiclePlans: VehiclePlan[];
+  metrics: PlanMetrics;
+  unserved: { orderId: string; reason: string }[];
+  provenance: { source: "Dữ liệu demo" | "Member 2 offline runtime"; scenarioId: ScenarioId; stateVersion: number; computedAt?: string; buildSha256?: string; integrationMode?: "LOCAL_MANUAL_ANCHOR" };
+}
+
+export interface ProposedAlternative {
+  id: string;
+  content: ImmutablePlanContent;
+  generatedForSessionId: string;
+  generatedForStateVersion: number;
+}
+
+export interface AcceptedPlanRecord {
+  id: string;
+  plan: ImmutablePlanContent;
+  acceptedAt: string;
+  supersededAt?: string;
+}
+
+export interface OperationalPlanAssessment {
+  planId: string;
+  status: "ACTIVE" | "NEEDS_REOPTIMIZATION";
+  reasons: string[];
+  assessedAgainstSessionId: string;
+  assessedAgainstStateVersion: number;
+}
+
+export interface PlanState {
+  acceptedPlans: AcceptedPlanRecord[];
+  activeAcceptedPlanId: string | null;
+  proposedAlternatives: ProposedAlternative[];
+  selectedAlternativeId: string | null;
+  operationalPlanAssessment: OperationalPlanAssessment | null;
+}
+
+export interface ExecutionState {
+  activePlanId: string | null;
+  progressByPlanId: Record<string, Record<string, {
+    currentStopId: string | null;
+    completedStopIds: string[];
+    completedSegmentIds: string[];
+  }>>;
+}
+
+export interface DemoEventSummary {
+  id: string;
+  sourceScenarioId: ScenarioId;
+  type: FixtureEvent["type"];
+  label: string;
+  status: EventStatus;
+}
+
+export interface DispatchSnapshot {
+  decisionState: DecisionState;
+  planState: PlanState;
+  executionState: ExecutionState;
+  demoClock: { now: string; label: "Thời gian demo" };
+  demo: {
+    availableEvents: DemoEventSummary[];
+    /** Demo bookkeeping: retain the one-event lock even while Urgent is OFF. Optional for legacy hydration. */
+    roundEventId?: string | null;
+  };
+}
