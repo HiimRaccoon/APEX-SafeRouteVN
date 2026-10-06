@@ -795,11 +795,9 @@ button:disabled {
   min-width: 0;
 }
 
-.capacity-input-wrap.invalid {
-  border-color: var(--color-danger);
-}
-
-.capacity-input-wrap input {
+.capacity-input-wrap output {
+  display: flex;
+  align-items: center;
   flex: 1;
   min-width: 0;
   height: 100%;
@@ -811,6 +809,12 @@ button:disabled {
   color: var(--color-text-main);
   font-variant-numeric: tabular-nums;
   background: transparent;
+}
+
+.capacity-source {
+  margin-top: 4px;
+  font-size: 9px;
+  color: var(--color-text-muted);
 }
 
 .capacity-kg-suffix {
@@ -867,88 +871,13 @@ button:disabled {
   cursor: pointer;
 }
 
-.preference-sliders {
+.fleet-profile-note {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-.slider-group {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.slider-header {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--color-text-secondary);
-}
-
-.slider-header b {
-  color: var(--color-primary);
-}
-
-/* Styled range sliders with fill colour via CSS custom property */
-input[type="range"].slider-input {
-  width: 100%;
-  height: 4px;
-  border-radius: 999px;
-  cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-  background: linear-gradient(
-    to right,
-    var(--fill) 0,
-    var(--fill) var(--pct, 30%),
-    #E2E8F0 var(--pct, 30%),
-    #E2E8F0 100%
-  );
-  border: none;
-  outline: none;
-}
-
-.slider-cost   { --fill: #1F6FEB; }
-.slider-success { --fill: #16A34A; }
-
-/* Webkit thumb */
-input[type="range"].slider-input::-webkit-slider-thumb {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: white;
-  border: 2px solid var(--fill, #1F6FEB);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.18);
-  cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-  margin-top: -5px;
-}
-
-/* Webkit track */
-input[type="range"].slider-input::-webkit-slider-runnable-track {
-  height: 4px;
-  border-radius: 999px;
-  background: transparent;
-}
-
-/* Firefox thumb */
-input[type="range"].slider-input::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: white;
-  border: 2px solid var(--fill, #1F6FEB);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.18);
-  cursor: pointer;
-}
-
-/* Firefox track */
-input[type="range"].slider-input::-moz-range-track {
-  height: 4px;
-  border-radius: 999px;
-  background: transparent;
+  gap: 4px;
+  margin: 8px 0 0;
+  font-size: 10px;
+  color: var(--color-text-muted);
 }
 
 /* Card 3: Context & Events — epoch row */

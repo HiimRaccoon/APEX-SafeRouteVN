@@ -76,31 +76,7 @@ function ToggleSwitch({
 
 export function AdminPage() {
   const { api, snapshot, pending, error, invoke } = useDispatch();
-  const [costWeight, setCostWeight] = useState(30);
-  const [punctualityWeight, setPunctualityWeight] = useState(40);
-  const [safetyWeight, setSafetyWeight] = useState(30);
   const [routeView, setRouteView] = useState<{ sessionId: string | null; visibility: Record<string, boolean> }>({ sessionId: null, visibility: {} });
-
-  /* Per-vehicle capacity state */
-  const [capacities, setCapacities] = useState<Record<string, number>>({});
-  /* Draft (string) values for each input while typing */
-  const [capDrafts, setCapDrafts] = useState<Record<string, string>>({});
-  /* Set to true if draft is invalid (NaN / out of range) */
-  const [capInvalid, setCapInvalid] = useState<Record<string, boolean>>({});
-
-  function handleCapChange(vid: string, raw: string) {
-    setCapDrafts((prev) => ({ ...prev, [vid]: raw }));
-    const n = parseInt(raw, 10);
-    if (!raw || isNaN(n) || n < 1 || n > 200) {
-      setCapInvalid((prev) => ({ ...prev, [vid]: true }));
-    } else {
-      setCapInvalid((prev) => ({ ...prev, [vid]: false }));
-      setCapacities((prev) => ({ ...prev, [vid]: n }));
-    }
-  }
-
-  /* Priority selector for Order Entry form */
-  const [orderPriority, setOrderPriority] = useState<'Normal' | 'Urgent'>('Normal');
 
   if (!snapshot) return <main className="page-loading">Loading dispatch workspace…</main>;
 
@@ -123,7 +99,7 @@ export function AdminPage() {
     (v) => v.availability === "AVAILABLE"
   ).length;
   const totalVehiclesCount = snapshot.decisionState.vehicles.length;
-  const currentCapacities = snapshot.decisionState.vehicles.map((vehicle) => capacities[vehicle.id] ?? vehicle.capacityKg);
+  const currentCapacities = snapshot.decisionState.vehicles.map((vehicle) => vehicle.capacityKg);
   const totalCapacity = currentCapacities.reduce((sum, capacity) => sum + capacity, 0);
   const totalOrdersCount = snapshot.decisionState.orders.length;
   const optimizedOrdersCount = active ? totalOrdersCount - active.plan.unserved.length : 0;
@@ -266,7 +242,7 @@ export function AdminPage() {
               <button
                 className="add-order-btn"
                 disabled
-                title="Pending Member 3 API"
+                title={L.addOrderTitle}
                 style={{ fontSize: "11px", opacity: 0.75, cursor: "not-allowed", padding: "4px 8px" }}
               >
                 + Add Order (Pending Member 3 API)
@@ -274,7 +250,7 @@ export function AdminPage() {
             </div>
 
             {/* 4-row form matching mockup */}
-            <div className="order-entry-form">
+            <div className="order-entry-form" role="group" aria-label="Sample Order Entry" title="Sample form — pending backend integration">
               {/* Row 1: Order ID | Pickup Location */}
               <div className="form-row-2">
                 <label>
@@ -314,7 +290,7 @@ export function AdminPage() {
                   <input type="text" readOnly value="14:00" className="mock-input" />
                 </label>
               </div>
-              {/* Row 3: Delivery Time Window | Weight | Priority (dropdown with chevron) */}
+              {/* Row 3: Delivery Time Window | Weight | Sample priority */}
               <div className="form-row-3">
                 <label>
                   <span className="label-nowrap">{L.deliveryTimeWindowLabel}</span>
@@ -329,18 +305,7 @@ export function AdminPage() {
                 </label>
                 <label>
                   <span>{L.priorityLabel}</span>
-                  <div className="mock-select">
-                    <select
-                      className="mock-input"
-                      value={orderPriority}
-                      onChange={(e) => setOrderPriority(e.target.value as 'Normal' | 'Urgent')}
-                      style={{ cursor: 'pointer', paddingRight: '20px' }}
-                    >
-                      <option value="Normal">Normal</option>
-                      <option value="Urgent">Urgent</option>
-                    </select>
-                    <ChevronDown size={11} className="select-chevron" />
-                  </div>
+                  <input type="text" readOnly value="Normal" className="mock-input" />
                 </label>
               </div>
               {/* Row 4: Primary | Notes */}
@@ -369,8 +334,7 @@ export function AdminPage() {
             <div className="order-queue">
               {snapshot.decisionState.orders.map((order) => {
                 const info = getCustomerInfo(order.id);
-                // If Priority dropdown is Urgent, mark newly added order (ORD-0152) as urgent-styled
-                const isUrgent = order.priority >= 3 || (orderPriority === 'Urgent' && order.id === 'ORD-0152');
+                const isUrgent = order.priority >= 3;
                 const parts = info.address.split(",");
                 const area = parts[1]?.trim() || parts[0]?.trim() || "Thủ Đức";
                 return (
@@ -408,13 +372,13 @@ export function AdminPage() {
             <div className="fleet-dropdowns">
               <label className="fleet-field">
                 <span className="fleet-label">{L.driversVehicles}</span>
-                <select className="fleet-select">
+                <select className="fleet-select" disabled>
                   <option>{availableVehiclesCount} / {totalVehiclesCount}</option>
                 </select>
               </label>
               <label className="fleet-field">
                 <span className="fleet-label">{L.vehicleType}</span>
-                <select className="fleet-select">
+                <select className="fleet-select" disabled>
                   <option>{L.vehicleTypeValue}</option>
                 </select>
               </label>
@@ -426,24 +390,17 @@ export function AdminPage() {
               <div className="capacity-inputs-grid">
                 {snapshot.decisionState.vehicles.map((v) => {
                   const color = vehicleColor(v.id);
-                  const invalid = !!capInvalid[v.id];
                   return (
                     <div key={v.id} className="capacity-input-cell">
                       <div className="capacity-cell-label">
                         <span className="cap-dot" style={{ background: color }} />
                         <span className="cap-vid">{v.id}</span>
                       </div>
-                      <div className={`capacity-input-wrap${invalid ? ' invalid' : ''}`}>
-                        <input
-                          type="number"
-                          min={1}
-                          max={200}
-                          value={capDrafts[v.id] ?? String(v.capacityKg)}
-                          aria-label={`Capacity ${v.id}`}
-                          onChange={(e) => handleCapChange(v.id, e.target.value)}
-                        />
+                      <div className="capacity-input-wrap">
+                        <output aria-label={`Capacity ${v.id}`}>{v.capacityKg}</output>
                         <span className="capacity-kg-suffix">kg</span>
                       </div>
+                      <small className="capacity-source">Scenario capacity</small>
                     </div>
                   );
                 })}
@@ -464,50 +421,10 @@ export function AdminPage() {
               })()}
             </div>
 
-            <div className="preference-sliders">
-              <label className="slider-group">
-                <div className="slider-header">
-                  <span>{L.costImportance}</span>
-                  <b>{costWeight}%</b>
-                </div>
-                <input
-                  aria-label="Cost weight"
-                  type="range" min="0" max="100"
-                  value={costWeight}
-                  className="slider-input slider-cost"
-                  style={{ '--pct': `${costWeight}%` } as React.CSSProperties}
-                  onChange={(e) => setCostWeight(Number(e.target.value))}
-                />
-              </label>
-              <label className="slider-group">
-                <div className="slider-header">
-                  <span>{L.punctualityImportance}</span>
-                  <b>{punctualityWeight}%</b>
-                </div>
-                <input
-                  aria-label="Punctuality weight"
-                  type="range" min="0" max="100"
-                  value={punctualityWeight}
-                  className="slider-input slider-success"
-                  style={{ '--pct': `${punctualityWeight}%` } as React.CSSProperties}
-                  onChange={(e) => setPunctualityWeight(Number(e.target.value))}
-                />
-              </label>
-              <label className="slider-group">
-                <div className="slider-header">
-                  <span>{L.safetyImportance}</span>
-                  <b>{safetyWeight}%</b>
-                </div>
-                <input
-                  aria-label="Safety weight"
-                  type="range" min="0" max="100"
-                  value={safetyWeight}
-                  className="slider-input slider-success"
-                  style={{ '--pct': `${safetyWeight}%` } as React.CSSProperties}
-                  onChange={(e) => setSafetyWeight(Number(e.target.value))}
-                />
-              </label>
-            </div>
+            <p className="fleet-profile-note">
+              <strong>{L.fixedProfiles}</strong>
+              <span>FASTEST · BALANCED · SAFER</span>
+            </p>
           </section>
 
             {/* ③ Context & Events */}
@@ -1016,7 +933,7 @@ export function AdminPage() {
                 const loadKg = snapshot.decisionState.orders
                   .filter((o) => vPlan?.orderedStops.some((s) => s.orderIds?.includes(o.id)))
                   .reduce((sum, o) => sum + o.demandKg, 0);
-                const cap = capacities[v.id] ?? v.capacityKg;
+                const cap = v.capacityKg;
                 return (
                   <div key={v.id} className="plan-summary-row">
                     <span className="plan-summary-dot" style={{ background: vehicleColor(v.id) }} />
@@ -1099,7 +1016,7 @@ export function AdminPage() {
                     : "Unavailable";
                   const stopOrder = currentStop?.orderIds?.[0] ?? null;
                   const color = vehicleColor(vehicle.id);
-                  const cap = capacities[vehicle.id] ?? vehicle.capacityKg;
+                  const cap = vehicle.capacityKg;
                   const load = vehicle.currentLoadKg;
                   const loadPct = Math.min(100, (load / cap) * 100);
                   const overload = load > cap;

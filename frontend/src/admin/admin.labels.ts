@@ -36,9 +36,7 @@ export const LABELS = {
   vehicleType: "Vehicle Type",
   capacity: "Capacity",
   vehicleTypeValue: "Motorcycle",
-  costImportance: "Cost Importance",
-  punctualityImportance: "Punctuality Importance",
-  safetyImportance: "Safety Importance",
+  fixedProfiles: "Fixed optimization profiles",
   availableChip: (avail: number, total: number) => `${avail} / ${total} available`,
 
   /* Context & Events */

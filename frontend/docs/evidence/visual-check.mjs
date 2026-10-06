@@ -31,6 +31,27 @@ try {
       await page.waitForFunction(() => (document.querySelector(".leaflet-container")?.getBoundingClientRect().width ?? 0) > 0);
       if (route === "admin") {
         await page.waitForSelector('button[aria-label="Show V1 route"]');
+        const controls = await page.evaluate(() => {
+          const snapshot = JSON.parse(localStorage.getItem("saferoute.phase1.dispatch.v1")).snapshot;
+          const displayed = [...document.querySelectorAll(".capacity-input-wrap output")].map((el) => Number(el.textContent));
+          const inputs = [...document.querySelectorAll(".order-entry-form input")];
+          return {
+            capacities: displayed,
+            stateCapacities: snapshot.decisionState.vehicles.map((vehicle) => vehicle.capacityKg),
+            capacityEditors: document.querySelectorAll(".capacity-input-wrap input").length,
+            weightSliders: document.querySelectorAll('input[type="range"]').length,
+            orderEntryReadOnly: inputs.length > 5 && inputs.every((input) => input.readOnly || input.disabled),
+            editablePriority: document.querySelectorAll(".order-entry-form select:not(:disabled)").length,
+            addOrderDisabled: document.querySelector(".add-order-btn").disabled
+          };
+        });
+        assert.deepEqual(controls.capacities, controls.stateCapacities);
+        assert.equal(controls.capacityEditors, 0);
+        assert.equal(controls.weightSliders, 0);
+        assert.equal(controls.orderEntryReadOnly, true);
+        assert.equal(controls.editablePriority, 0);
+        assert.equal(controls.addOrderDisabled, true);
+        console.log(JSON.stringify({ route, width, controls }));
         assert.equal(await page.$$eval(".leaflet-overlay-pane path", (paths) => paths.length), 0);
         await page.screenshot({ path: `docs/evidence/admin-${width}-default.png` });
         await enableAdminRoutes(page);
