@@ -244,10 +244,9 @@ describe("Admin and Driver experiences", () => {
     expect(await screen.findByText(/total capacity:\s*30 kg/i)).toBeInTheDocument();
   });
 
-  it("exposes the read-only sample priority to assistive technology", async () => {
+  it("exposes the visible order priority control to assistive technology", async () => {
     renderExperience("/admin");
-    expect(await screen.findByRole("textbox", { name: "Priority" })).toHaveAttribute("readonly");
-    expect(screen.queryByRole("combobox", { name: "Priority" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("combobox", { name: "Priority" })).toBeInTheDocument();
   });
 
   it("labels simulated dispatch honestly and shows no invented notification count", async () => {

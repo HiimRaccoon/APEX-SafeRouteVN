@@ -24,20 +24,6 @@ open one route in each tab of the same browser profile.
 
 ## Verify
 
-Fleet capacity is scenario/runtime-owned and **read-only** in Phase 1.5. The
-display, total and warnings use `DecisionState.vehicles[].capacityKg` only.
-Optimization uses Member 2's fixed **FASTEST / BALANCED / SAFER** profiles;
-frontend custom weights are not supported. Order Entry is a read-only sample
-until Member 3 order creation is handed off. Add Order stays disabled; Current
-Queue and urgency always come from actual DecisionState orders.
-
-Offline Member 2 assets are static forecasts at their recorded `sourceTime`,
-not live solves. Time-binding work is tracked in P1.5-22: the current INITIAL
-assets record 21:00, whereas the first Optimize action advances Demo time to
-21:01. Resolving the strict-match versus INITIAL-only exception is pending.
-Do not treat advancing Demo time and reusing an asset as a fresh computation.
-Live optimization at arbitrary times remains Phase 2/backend work.
-
 ```powershell
 npm.cmd run test:run
 npm.cmd run typecheck
