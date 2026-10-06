@@ -12,6 +12,7 @@ export interface DecisionEvent {
 
 export interface DecisionState {
   sessionId: string;
+  /** Legacy mock counter. Backend leaves this at 0; its server revision is backend.basis. */
   version: number;
   scenarioId: ScenarioId;
   orders: Order[];
@@ -132,6 +133,7 @@ export interface DispatchSnapshot {
     baseUrl: string;
     executionMode: "SIMULATED_REPLAY";
     realWorldObservation: false;
+    /** Server identity/revision. Bind backend proposals/jobs to every field, including string head_version and generation. */
     basis: import("../../integrations/member3/types").M3Basis;
     executionView: import("../../integrations/member3/types").M3ExecutionView;
   };

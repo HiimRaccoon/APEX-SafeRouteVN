@@ -68,8 +68,6 @@ export function mapM3World(session: M3Session, state: M3ExecutionView, ordersVie
     const parsed = execution(state);
     const basis = comparableBasis(state.basis);
     if (basis.session_id !== session.session_id || basis.build_sha256 !== session.build_sha256) throw new Error("Session binding mismatch");
-    const revision = Number(basis.head_version);
-    if (!Number.isSafeInteger(revision)) throw new Error("Revision exceeds the frontend safe integer range");
     for (const [kind, projection] of [["orders", ordersView], ["vehicles", vehiclesView], ["locations", locationsView]] as const) {
       const value = record(projection, kind);
       if (value.schema_version !== `saferoute-m3-${kind}-view/1`) throw new Error("Invalid projection schema");
@@ -129,7 +127,9 @@ export function mapM3World(session: M3Session, state: M3ExecutionView, ordersVie
     sameIds(locations.filter((item) => item.kind === "DELIVERY").map((item) => item.orderId!), orders.map((item) => item.id));
     if (orders.some((order) => !locations.some((location) => location.kind === "DEPOT" && location.id === order.pickupLocationId))) throw new Error("Missing depot");
     return {
-      decisionState: { sessionId: session.session_id, scenarioId: session.scenario_id as ScenarioId, version: revision, orders, vehicles, locations, context: { rain: null }, events: [] },
+      // The legacy numeric version belongs to mock mode only. Backend revision and
+      // proposal/job binding must use the complete string-valued backend.basis.
+      decisionState: { sessionId: session.session_id, scenarioId: session.scenario_id as ScenarioId, version: 0, orders, vehicles, locations, context: { rain: null }, events: [] },
       planState: { acceptedPlans: [], activeAcceptedPlanId: null, proposedAlternatives: [], selectedAlternativeId: null, operationalPlanAssessment: null },
       executionState: { activePlanId: null, progressByPlanId: {} }, demoClock: { now: parsed.currentTime, label: "Thời gian demo" }, demo: { availableEvents: [] },
       backend: { source: "MEMBER3_HTTP", baseUrl, basis, executionMode: state.execution_mode, realWorldObservation: false, executionView: state }

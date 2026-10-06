@@ -53,7 +53,7 @@ describe("BackendDispatchApi foundation", () => {
     const snapshots: unknown[] = [];
     api.subscribe((snapshot) => snapshots.push(snapshot));
     const snapshot = await api.loadScenario("S1");
-    expect(snapshot.decisionState).toMatchObject({ sessionId: "m3-owned-session", scenarioId: "S1", version: 2 });
+    expect(snapshot.decisionState).toMatchObject({ sessionId: "m3-owned-session", scenarioId: "S1", version: 0 });
     expect(snapshot.decisionState.orders[0]).toMatchObject({ id: "M3-O1", latitude: 10.83, longitude: 106.73, demandKg: 7,
       status: "WAITING", assignedVehicleId: null, serviceTimeHours: 0.25, graphNodeId: "9007199254740993", pickedUpAt: null, deliveredAt: null });
     expect(snapshot.decisionState.vehicles[0]).toMatchObject({ id: "M3-V1", capacityKg: 20, currentPosition: { latitude: 10.82, longitude: 106.72, graphNodeId: "9007199254740993" } });
@@ -88,6 +88,53 @@ describe("BackendDispatchApi foundation", () => {
     const s = server();
     s.orders.basis = { ...s.orders.basis, head_sha256: "other-head" };
     await expect(new BackendDispatchApi({ client: s.client, storage: s.storage }).loadScenario("S1")).rejects.toMatchObject({ code: "STATE_CHANGED" });
+  });
+
+  it.each([
+    ["0", "0"],
+    ["9007199254740993", "9007199254740995"],
+    ["9223372036854775807", "9223372036854775807"]
+  ])("preserves the complete string revision (%s, %s) without using the legacy mock version", async (headVersion, generation) => {
+    const s = server();
+    s.state.basis.head_version = headVersion;
+    s.state.basis.generation = generation;
+    const snapshot = await new BackendDispatchApi({ client: s.client, storage: s.storage }).loadScenario("S1");
+    expect(snapshot.backend?.basis).toEqual({ session_id: "m3-owned-session", build_sha256: "b".repeat(64),
+      head_version: headVersion, generation, root_sha256: "1".repeat(64), head_sha256: "2".repeat(64),
+      source_sha256: "3".repeat(64), context_version: "context-1", overlay_sha256: null });
+    expect(snapshot.backend?.executionView.basis.head_version).toBe(headVersion);
+    expect(snapshot.backend?.executionView.basis.generation).toBe(generation);
+    expect(snapshot.decisionState.version).toBe(0);
+  });
+
+  it("refreshes generation-only changes while the head and legacy mock version stay unchanged", async () => {
+    const s = server();
+    const api = new BackendDispatchApi({ client: s.client, storage: s.storage });
+    const before = await api.loadScenario("S1");
+    s.state.basis = { ...s.state.basis, generation: "1" };
+    s.orders.basis = s.vehicles.basis = s.locations.basis = s.state.basis;
+    const after = await api.getSnapshot();
+    expect(before.backend?.basis).toMatchObject({ head_version: "2", generation: "0" });
+    expect(after.backend?.basis).toMatchObject({ head_version: "2", generation: "1" });
+    expect(before.decisionState.version).toBe(0);
+    expect(after.decisionState.version).toBe(0);
+    expect(after.backend?.basis).not.toEqual(before.backend?.basis);
+  });
+
+  it("rejects projections whose generation differs even when their head version matches", async () => {
+    const s = server();
+    s.orders.basis = { ...s.orders.basis, generation: "1" };
+    await expect(new BackendDispatchApi({ client: s.client, storage: s.storage }).loadScenario("S1"))
+      .rejects.toMatchObject({ code: "STATE_CHANGED" });
+  });
+
+  it.each(["head_version", "generation"])("rejects invalid %s without converting it to a number", async (field) => {
+    for (const value of [2, "01", "-1", "9223372036854775808"]) {
+      const s = server();
+      Reflect.set(s.state.basis, field, value);
+      await expect(new BackendDispatchApi({ client: s.client, storage: s.storage }).loadScenario("S1"))
+        .rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+    }
   });
 
   it("rejects malformed coverage and invalid coordinates rather than substituting fixtures", async () => {
