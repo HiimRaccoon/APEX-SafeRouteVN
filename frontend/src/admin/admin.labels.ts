@@ -137,6 +137,7 @@ export const LABELS = {
   /* Scenario Options */
   scenarios: {
     S0: "S0 \u2014 Initial Plan (Depot, 3 orders, 2 vehicles)",
+    S1: "S1 \u2014 Normal Delivery Day (8 orders, 2 vehicles)",
     S2: "S2 \u2014 Urgent Order (O009)",
     S3: "S3 \u2014 Vehicle Unavailable (V1 breakdown)",
     S4: "S4 \u2014 Local Heavy Rain (Thu Duc flood zone)",

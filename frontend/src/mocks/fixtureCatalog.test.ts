@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import s1Raw from "../../../scenarios/fixtures/thu-duc-binh-thanh-v1/S1.json";
 import { getFixtureScenario, listFixtureScenarios } from "./fixtureCatalog";
 
 describe("Member 1 fixture catalog", () => {
@@ -19,7 +20,20 @@ describe("Member 1 fixture catalog", () => {
     expect(rain).toMatchObject({ type: "LOCAL_RAIN_WHAT_IF", polygon: { type: "Polygon" } });
   });
 
-  it("lists only the four Phase 1 scenarios", () => {
-    expect(listFixtureScenarios().map((scenario) => scenario.id)).toEqual(["S0", "S2", "S3", "S4"]);
+  it("loads the exact Member 1 normal delivery fixture without frontend events", () => {
+    const scenario = getFixtureScenario("S1");
+    expect(scenario).toEqual(s1Raw);
+    expect(scenario.scenarioId).toBe("S1");
+    expect(scenario.description).toBe("Normal synthetic delivery day");
+    expect(scenario.initialState.orders.map((order) => order.id)).toEqual([
+      "O001", "O002", "O003", "O004", "O005", "O006", "O007", "O008"
+    ]);
+    expect(scenario.initialState.vehicles.map((vehicle) => [vehicle.id, vehicle.capacityKg])).toEqual([["V1", 15], ["V2", 15]]);
+    expect(scenario.initialState.currentTime).toBe("2026-09-27T21:00:00+07:00");
+    expect(scenario.events).toEqual([]);
+  });
+
+  it("lists the five supported scenarios in source order", () => {
+    expect(listFixtureScenarios().map((scenario) => scenario.id)).toEqual(["S0", "S1", "S2", "S3", "S4"]);
   });
 });

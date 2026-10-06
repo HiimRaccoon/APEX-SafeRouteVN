@@ -1,4 +1,4 @@
-export type ScenarioId = "S0" | "S2" | "S3" | "S4";
+export type ScenarioId = "S0" | "S1" | "S2" | "S3" | "S4";
 export type OrderStatus = "WAITING" | "ONBOARD" | "DELIVERED";
 export type VehicleAvailability = "AVAILABLE" | "UNAVAILABLE";
 

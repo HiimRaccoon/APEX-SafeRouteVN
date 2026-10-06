@@ -94,6 +94,8 @@ Capacity regressions gồm bốn case user yêu cầu và thêm pool-complement 
 
 TDD lifecycle/geometry/metric/fallback tests chạy đỏ trước sửa và xanh sau sửa; full suite **97/97 pass**, typecheck/lint/build exit 0. Browser check cả bốn initial scenarios, persisted hydrate và event fallback pass ([results](evidence/offline-route-results.json)); Admin 1280/1440, Driver 360/390/430 có map và `overflowPx=0` ([visual results](evidence/visual-results.json)). Forced tile failure giữ 564 routes/6 markers; bug React ghi đè class Leaflet đã được sửa/test. UI giữ phong cách cũ; KPI dùng Fleet travel/Route cost/exposure proxy, missing on-time/ETA là dash, không trừ metrics khác scope. Build còn cảnh báo JS bundle khoảng 3.55 MB (875 kB gzip); WebView thật và P1.5-13 vẫn mở. [Runtime commands/provenance](../../m2_runtime/README.md).
 
+- [x] **P1.5-21 — S1 initial road support (2026-10-06):** Import nguyên bản Member 1 S1, thêm vào type/catalog/selector có sẵn; Load tạo phiên sạch, 8 đơn, V1/V2 15 kg, không event/auto Optimize. Public SDK với released build và pinned snapshot tính độc lập ba certified FEASIBLE profiles: FASTEST 1.270 EDGE, BALANCED/SAFER 1.289 EDGE; phục vụ 8/8. Append pack, giữ nguyên bốn pack cũ và mọi EDGE coordinate. 138 tests pass; typecheck/lint/build exit 0. Browser cả ba profiles, V1/V2, Driver accepted-only, S0/S2/S3/S4 initial và năm event flows pass. [Báo cáo 20 mục](s1-support-verification.md), [browser](evidence/s1-road-results.json), [baseline integrity](evidence/s1-baseline-integrity.json). Bundle warning còn; không sửa engine/Driver/layout/event/M2 runtime.
+
 ## Phase 2 — chờ Member 3 backend
 
 - [ ] **BLOCKED P2-01 — Freeze Member 3 API contract:** Chờ endpoint/request/response thật, auth/role, job lifecycle, events, accept, execution, diagnostics, realtime và presentation fields.
@@ -112,6 +114,6 @@ TDD lifecycle/geometry/metric/fallback tests chạy đỏ trước sửa và xan
 
 ## Ranh giới và ghi chú kiểm chứng
 
-- Member 1 suite `thu-duc-binh-thanh-v1` có S0/S2/S3/S4 và `S4.events[0].polygon` thực. S0 có 3 orders/2 vehicles; đó là pinned fixture contract, không là giả định số lượng toàn hệ thống.
+- Member 1 suite `thu-duc-binh-thanh-v1` có S0/S1/S2/S3/S4 và `S4.events[0].polygon` thực. S0 có 3 orders/2 vehicles; S1 có 8 orders/2 vehicles và events rỗng; đó là pinned fixture contract, không là giả định số lượng toàn hệ thống.
 - Manifest scenario ghi `integrated=false`; cached context cần thiết đã tải cho offline runtime (routing/network.sqlite, features/features.sqlite và metadata). Frontend vẫn chỉ consume JSON, không mở SQLite.
 - Phase 1 prepared geometry/KPI là baseline lịch sử. Phase 1.5 dùng certified SDK initial packs hoặc raw-validated local manual-event packs khi toàn bộ world match; không match thì schematic có nhãn. Phase 2 vẫn chờ transport/physical lifecycle M3; không suy diễn official endpoints.

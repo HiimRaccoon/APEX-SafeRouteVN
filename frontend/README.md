@@ -2,8 +2,8 @@ Member 4 ownership — Admin Decision Workspace and Driver Operational Web.
 
 Phase 1 is a React + TypeScript + Vite demo. It implements `/admin` for the
 dispatcher and `/driver` for the driver, with a shared mock state engine and
-`localStorage` persistence. It uses the pinned Member 1 S0/S2/S3/S4 fixtures.
-Phase 1.5 uses offline Member 2 road routes for the matching initial S0/S2/S3/S4
+`localStorage` persistence. It uses the pinned Member 1 S0/S1/S2/S3/S4 fixtures.
+Phase 1.5 uses offline Member 2 road routes for the matching initial S0/S1/S2/S3/S4
 worlds. All three profiles were computed and certified with the released runtime.
 Their supplied geometry, assignment and forecast metrics are consumed together.
 Five exact post-event worlds also use locally computed M2 forecasts, with
@@ -35,6 +35,15 @@ Demo flow: load S0 → Optimize → Select → Accept → open `/driver`
 → trigger one event → Re-optimize → Select → Accept. Reset Demo starts a new
 round. Direct S2/S3/S4 loads the fixture initial state and leaves its event
 ready for Dispatcher to trigger.
+
+For a normal eight-order day, use **Context & Events → Demo tools →
+S1 — Normal Delivery Day (8 orders, 2 vehicles)**. Loading starts a clean session
+with V1/V2 at 15 kg each and no events or plans. Optimize supplies FASTEST,
+BALANCED and SAFER from S1's own certified Member 2 initial-world compute;
+enable V1/V2 Route to preview, then Accept to send the plan to Driver.
+All three serve 8/8 orders; BALANCED and SAFER legitimately share a route.
+[S1 source and verification report](docs/s1-support-verification.md) records
+the retained raw jobs, exact EDGE comparison and browser evidence.
 
 To see the new road routes after an earlier demo, refresh and **Reset Demo →
 Optimize → Select → Accept**. In Admin's right **Decision Intelligence** panel,
@@ -89,7 +98,7 @@ frontend with the generated asset.
 ## Repository checkout
 
 Keep `frontend/` alongside the repository's pinned Member 1
-`scenarios/fixtures/thu-duc-binh-thanh-v1/` directory. Its S0/S2/S3/S4 JSON files
+`scenarios/fixtures/thu-duc-binh-thanh-v1/` directory. Its S0/S1/S2/S3/S4 JSON files
 are required by the mock fixture adapter. Member 2 execution-view contract tests
 use exact handoff samples pinned in `src/integrations/member2/fixtures/`; a
 separate local Member 2 source checkout is not required to run these tests.

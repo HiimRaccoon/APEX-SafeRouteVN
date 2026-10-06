@@ -1,4 +1,5 @@
 import s0Raw from "../../../scenarios/fixtures/thu-duc-binh-thanh-v1/S0.json";
+import s1Raw from "../../../scenarios/fixtures/thu-duc-binh-thanh-v1/S1.json";
 import s2Raw from "../../../scenarios/fixtures/thu-duc-binh-thanh-v1/S2.json";
 import s3Raw from "../../../scenarios/fixtures/thu-duc-binh-thanh-v1/S3.json";
 import s4Raw from "../../../scenarios/fixtures/thu-duc-binh-thanh-v1/S4.json";
@@ -22,6 +23,7 @@ const s0Fixture: ScenarioFixture = {
 
 const catalog: readonly FixtureScenarioSummary[] = [
   { id: "S0", label: "S0 — Kế hoạch ban đầu", fixture: s0Fixture },
+  { id: "S1", label: "S1 — Normal Delivery Day", fixture: s1Raw as ScenarioFixture },
   { id: "S2", label: "S2 — Đơn hàng khẩn", fixture: s2Raw as ScenarioFixture },
   { id: "S3", label: "S3 — Xe không khả dụng", fixture: s3Raw as ScenarioFixture },
   { id: "S4", label: "S4 — Mưa cục bộ", fixture: s4Raw as ScenarioFixture }

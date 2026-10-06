@@ -599,7 +599,7 @@ export function AdminPage() {
                     value={snapshot.decisionState.scenarioId}
                     onChange={(ev) =>
                       void invoke(() =>
-                        api.loadScenario(ev.target.value as "S0" | "S2" | "S3" | "S4")
+                        api.loadScenario(ev.target.value as "S0" | "S1" | "S2" | "S3" | "S4")
                       )
                     }
                   >
