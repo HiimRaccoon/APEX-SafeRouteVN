@@ -80,11 +80,16 @@ export interface ImmutablePlanContent {
 }
 
 export interface ProposedAlternative {
+  origin?: ProposalOrigin;
   id: string;
   content: ImmutablePlanContent;
   generatedForSessionId: string;
   generatedForStateVersion: number;
 }
+
+export type ProposalOrigin =
+  | { kind: "MOCK"; sessionId: string; stateVersion: number }
+  | { kind: "MEMBER3"; sessionId: string; comparisonId: string; jobId: string; profile: PlanProfile; inputBasis: import("../../integrations/member3/types").M3Basis };
 
 export interface AcceptedPlanRecord {
   id: string;
@@ -136,6 +141,12 @@ export interface DispatchSnapshot {
     /** Server identity/revision. Bind backend proposals/jobs to every field, including string head_version and generation. */
     basis: import("../../integrations/member3/types").M3Basis;
     executionView: import("../../integrations/member3/types").M3ExecutionView;
+    scenarios?: import("../../integrations/member3/scenarioAdapter").ScenarioOption[];
+    comparison?: import("../../integrations/member3/types").M3ComparisonView;
+    jobs?: Record<string, import("../../integrations/member3/types").M3JobView>;
+    capabilities?: import("../../integrations/member3/capabilities").DispatchCapabilities;
+    stale?: boolean;
+    error?: { code: string; message: string };
   };
   decisionState: DecisionState;
   planState: PlanState;

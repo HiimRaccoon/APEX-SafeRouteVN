@@ -1,4 +1,6 @@
 import { Member3Error } from "./errors";
+import { parseComparisonReceipt, parseComparisonView, parseJobView } from "./jobViewAdapter";
+import type { CompareProfilesRequest, M3ComparisonCancellation } from "./types";
 import type { M3Capabilities, M3Catalog, M3Envelope, M3ExecutionView, M3LoadedSession, M3LocationsView, M3OrdersView, M3Ready, M3VehiclesView } from "./types";
 
 export const M3_TOKEN_KEY = "saferoute.member3.bearer";
@@ -30,12 +32,31 @@ export class Member3Client {
   loadScenario(id: string, requestId: string) {
     return this.request<M3LoadedSession>(`/api/scenarios/${encodeURIComponent(id)}/load`, true, { request_id: requestId });
   }
-  state(id: string) { return this.request<M3ExecutionView>(`/api/sessions/${encodeURIComponent(id)}/state`); }
-  orders(id: string) { return this.request<M3OrdersView>(`/api/sessions/${encodeURIComponent(id)}/orders`); }
-  vehicles(id: string) { return this.request<M3VehiclesView>(`/api/sessions/${encodeURIComponent(id)}/vehicles`); }
-  locations(id: string) { return this.request<M3LocationsView>(`/api/sessions/${encodeURIComponent(id)}/locations`); }
+  state(id: string, signal?: AbortSignal) { return this.request<M3ExecutionView>(`/api/sessions/${encodeURIComponent(id)}/state`, true, undefined, signal); }
+  orders(id: string, signal?: AbortSignal) { return this.request<M3OrdersView>(`/api/sessions/${encodeURIComponent(id)}/orders`, true, undefined, signal); }
+  vehicles(id: string, signal?: AbortSignal) { return this.request<M3VehiclesView>(`/api/sessions/${encodeURIComponent(id)}/vehicles`, true, undefined, signal); }
+  locations(id: string, signal?: AbortSignal) { return this.request<M3LocationsView>(`/api/sessions/${encodeURIComponent(id)}/locations`, true, undefined, signal); }
+  async compareProfiles(sid: string, body: CompareProfilesRequest, signal?: AbortSignal) {
+    return parseComparisonReceipt(await this.request(`/api/sessions/${encodeURIComponent(sid)}/profiles/compare`, true, body, signal));
+  }
+  async comparison(sid: string, cid: string, signal?: AbortSignal) {
+    const view = parseComparisonView(await this.request(`/api/sessions/${encodeURIComponent(sid)}/profiles/comparisons/${encodeURIComponent(cid)}`, true, undefined, signal));
+    if (view.session_id !== sid || view.comparison_id !== cid) throw new Member3Error("INVALID_RESPONSE", "Comparison identity differs from requested resource.");
+    return view;
+  }
+  async job(sid: string, jid: string, signal?: AbortSignal) {
+    const view = parseJobView(await this.request(`/api/sessions/${encodeURIComponent(sid)}/jobs/${encodeURIComponent(jid)}`, true, undefined, signal));
+    if (view.input_basis.session_id !== sid || view.job_id !== jid) throw new Member3Error("INVALID_RESPONSE", "Job identity differs from requested resource.");
+    return view;
+  }
+  async cancelComparison(sid: string, cid: string, requestId: string): Promise<M3ComparisonCancellation> {
+    const receipt = await this.request<M3ComparisonCancellation>(`/api/sessions/${encodeURIComponent(sid)}/profiles/comparisons/${encodeURIComponent(cid)}/cancel`, true, { request_id: requestId });
+    if (receipt.schema_version !== "saferoute-m3-profile-cancellation/1" || receipt.session_id !== sid || receipt.comparison_id !== cid ||
+        !["CANCEL_REQUESTED", "COMPLETED_IMMUTABLE"].includes(receipt.status) || receipt.affects_existing_jobs !== false) throw new Member3Error("INVALID_RESPONSE", "Invalid comparison cancellation receipt.");
+    return receipt;
+  }
 
-  private async request<T>(path: string, authenticated = true, body?: { request_id: string }): Promise<T> {
+  private async request<T>(path: string, authenticated = true, body?: { request_id: string }, signal?: AbortSignal): Promise<T> {
     const token = authenticated ? this.token()?.trim() : null;
     if (authenticated && !token) throw new Member3Error("AUTH_REQUIRED", "M3 bearer token required. Configure the token for this browser session.");
     const headers: Record<string, string> = { Accept: "application/json" };
@@ -45,9 +66,10 @@ export class Member3Client {
     try {
       response = await this.fetcher(`${this.baseUrl}${path}`, {
         method: body ? "POST" : "GET", headers, body: body ? JSON.stringify(body) : undefined,
-        cache: "no-store", redirect: "error", credentials: "omit", signal: AbortSignal.timeout(125000)
+        cache: "no-store", redirect: "error", credentials: "omit", signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(125000)]) : AbortSignal.timeout(125000)
       });
     } catch {
+      if (signal?.aborted) throw new DOMException("M3 read aborted", "AbortError");
       throw new Member3Error("NETWORK_ERROR", "Cannot reach M3. Check backend readiness, base URL and CORS.");
     }
     let value: M3Envelope<T>;

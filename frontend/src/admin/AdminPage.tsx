@@ -22,6 +22,8 @@ import type { ImmutablePlanContent, PlanProfile } from "../shared/types/dispatch
 import { useDispatch } from "../app/DispatchContext";
 import { getCustomerInfo, getDriverInfo } from "../mocks/presentation";
 import { LABELS as L } from "./admin.labels";
+import { terminalComparison, comparisonCanRank } from "../integrations/member3/jobViewAdapter";
+import { sameBasis, proposalCurrency } from "../integrations/member3/revision";
 
 const profiles: PlanProfile[] = ["FASTEST", "BALANCED", "SAFER"];
 
@@ -103,6 +105,11 @@ export function AdminPage() {
   const [orderPriority, setOrderPriority] = useState<'Normal' | 'Urgent'>('Normal');
 
   if (!snapshot) return <main className="page-loading" role={error ? "alert" : undefined}>{error ?? "Loading dispatch workspace…"}</main>;
+  const backend = snapshot.backend;
+  const comparison = backend?.comparison;
+  const comparisonRunning = Boolean(comparison && !terminalComparison(comparison));
+  const optimizeDisabled = pending || Boolean(backend && (backend.stale || !backend.capabilities?.optimize || comparisonRunning));
+  const phaseControlsDisabled = pending || Boolean(backend);
 
   const selected = snapshot.planState.proposedAlternatives.find(
     (plan) => plan.id === snapshot.planState.selectedAlternativeId
@@ -166,7 +173,7 @@ export function AdminPage() {
       : null;
 
   return (
-    <main className="admin-page" data-session-id={snapshot.decisionState.sessionId} data-dispatch-source={snapshot.backend?.source ?? "MOCK"} data-execution-mode={snapshot.backend?.executionMode}>
+    <main className="admin-page" data-session-id={snapshot.decisionState.sessionId} data-dispatch-source={snapshot.backend?.source ?? "MOCK"} data-execution-mode={snapshot.backend?.executionMode} data-comparison-id={comparison?.comparison_id} data-comparison-status={comparison?.status}>
       <h1 className="sr-only">SafeRoute VN Dispatcher Workspace (Điều phối)</h1>
 
       {/* ── Top Navigation Bar ── */}
@@ -535,7 +542,7 @@ export function AdminPage() {
                     type="button"
                     className="epoch-advance-btn"
                     title="Advance clock by 10 minutes"
-                    disabled={pending}
+                    disabled={phaseControlsDisabled}
                     onClick={() => void invoke(() => api.advanceDemoClock(10))}
                   >
                     +10m
@@ -544,7 +551,7 @@ export function AdminPage() {
                     type="button"
                     className="epoch-advance-btn"
                     title="Advance clock by 30 minutes"
-                    disabled={pending}
+                    disabled={phaseControlsDisabled}
                     onClick={() => void invoke(() => api.advanceDemoClock(30))}
                   >
                     +30m
@@ -560,7 +567,7 @@ export function AdminPage() {
                     id="toggle-urgent"
                     label={L.urgentOrder}
                     checked={urgentOn}
-                    disabled={pending || !urgentEvent || (eventRoundUsed && roundEventId !== urgentEvent.id) || urgentLocked}
+                    disabled={phaseControlsDisabled || !urgentEvent || (eventRoundUsed && roundEventId !== urgentEvent.id) || urgentLocked}
                     title={urgentLocked ? "The urgent order cannot be cancelled after pickup." : "Add or cancel the waiting urgent order"}
                     onTrigger={() => void invoke(() => api.setUrgentOrderEnabled(!urgentOn))}
                   />
@@ -571,7 +578,7 @@ export function AdminPage() {
                     id="toggle-driver"
                     label={L.driverUnavailable}
                     checked={eventByType("VEHICLE_UNAVAILABLE")?.status === "TRIGGERED"}
-                    disabled={pending || eventRoundUsed || !eventByType("VEHICLE_UNAVAILABLE")}
+                    disabled={phaseControlsDisabled || eventRoundUsed || !eventByType("VEHICLE_UNAVAILABLE")}
                     onTrigger={() => triggerEvent("VEHICLE_UNAVAILABLE")}
                   />
                 </div>
@@ -581,7 +588,7 @@ export function AdminPage() {
                     id="toggle-rain"
                     label={L.localRain}
                     checked={eventByType("LOCAL_RAIN_WHAT_IF")?.status === "TRIGGERED"}
-                    disabled={pending || eventRoundUsed || !eventByType("LOCAL_RAIN_WHAT_IF")}
+                    disabled={phaseControlsDisabled || eventRoundUsed || !eventByType("LOCAL_RAIN_WHAT_IF")}
                     onTrigger={() => triggerEvent("LOCAL_RAIN_WHAT_IF")}
                   />
                 </div>
@@ -604,13 +611,13 @@ export function AdminPage() {
                       )
                     }
                   >
-                    {Object.entries(L.scenarios).map(([key, label]) => (
+                    {(backend ? (backend.scenarios ?? []).map(s => [s.id, `${s.id} — ${s.orderCount} orders, ${s.vehicleCount} vehicles · ${s.initialTime}`]) : Object.entries(L.scenarios)).map(([key, label]) => (
                       <option key={key} value={key}>{label}</option>
                     ))}
                   </select>
                   <button
                     className="text-button reset-button"
-                    disabled={pending}
+                    disabled={phaseControlsDisabled}
                     onClick={() => void invoke(() => api.resetDemoSession())}
                   >
                     Reset demo to S0
@@ -627,7 +634,7 @@ export function AdminPage() {
                 <button
                   className="cta-btn cta-reoptimize"
                   aria-label={L.reoptimize}
-                  disabled={pending}
+                  disabled={optimizeDisabled}
                   onClick={() => void invoke(() => api.optimize())}
                 >
                   <RefreshCw size={14} strokeWidth={2} />
@@ -636,7 +643,7 @@ export function AdminPage() {
                 <button
                   className="cta-btn cta-accept"
                   aria-label={L.acceptSelectedPlan}
-                  disabled={!selected || pending}
+                  disabled={!selected || phaseControlsDisabled || proposalCurrency(selected, snapshot) === "STALE"}
                   onClick={() => void invoke(() => api.acceptSelectedPlan())}
                 >
                   <Check size={14} strokeWidth={2} />
@@ -648,7 +655,7 @@ export function AdminPage() {
                 <button
                   className="cta-btn cta-optimize"
                   aria-label={L.optimize}
-                  disabled={pending}
+                  disabled={optimizeDisabled}
                   onClick={() => void invoke(() => api.optimize())}
                 >
                   <Zap size={14} strokeWidth={2} />
@@ -914,9 +921,17 @@ export function AdminPage() {
                 </div>
               </div>
               <span className={`di-status-badge ${(active || hasProposals) ? 'di-badge-optimized' : 'di-badge-idle'}`}>
-                {(active || hasProposals) ? 'Optimized' : 'Not optimized'}
+                {backend ? comparison?.status ?? 'Not optimized' : (active || hasProposals) ? 'Optimized' : 'Not optimized'}
               </span>
             </div>
+
+            {backend && <div className="di-hint-text" role="status">
+              {comparison ? `Comparison ${comparison.status} · ${comparison.outcome?.comparison?.status ?? comparison.outcome?.reason ?? "Waiting for server verdict"} · ${sameBasis(comparison.input_basis, backend.basis) ? "CURRENT" : "STALE"}` : "Optimize runs three forecasts through Member 3."}
+              <p>Forecast preview is unavailable until the public geometry contract is connected.</p>
+              <button type="button" className="text-button" disabled={pending} onClick={() => void invoke(() => api.getSnapshot())}>Refresh backend</button>
+              {comparisonRunning && api.cancelComparison && <button type="button" className="text-button" disabled={pending || backend.stale} onClick={() => void invoke(() => api.cancelComparison!())}>Cancel comparison</button>}
+              {comparison && <p title={comparison.comparison_id}>M3 · {comparison.comparison_id} · head {comparison.input_basis.head_version} / generation {comparison.input_basis.generation}{comparisonCanRank(comparison) ? " · Comparable forecasts" : " · No comparative ranking"}</p>}
+            </div>}
 
             {/* 3 Alternative Cards */}
             <div className="alt-cards-grid">
@@ -928,16 +943,17 @@ export function AdminPage() {
                 const isBalanced = profile === "BALANCED";
                 const hasData = Boolean(proposal);
                 const onTimeVal = hasData ? proposal!.content.metrics.onTimeRate : null;
+                const child = comparison?.jobs.find(row => row.profile === profile);
 
                 return (
                   <article
                     key={profile}
                     className={`alt-card${isSelected ? " alt-card-selected selected" : ""}`}
-                    onClick={() => proposal && void invoke(() => api.selectAlternative(proposal.id))}
+                    onClick={() => !backend && proposal && proposalCurrency(proposal, snapshot) === "CURRENT" && void invoke(() => api.selectAlternative(proposal.id))}
                     style={{ cursor: proposal ? "pointer" : "default" }}
                   >
                     {/* Recommended badge (Stitch: blue, absolute above border) */}
-                    {isBalanced && (
+                    {isBalanced && !backend && (
                       <em className={`recommended-badge${hasData ? "" : " dim"}`}>{L.recommendedTag}</em>
                     )}
                     {/* Check circle when selected */}
@@ -953,6 +969,13 @@ export function AdminPage() {
                       </div>
                       <span className="alt-desc">{PROFILE_DESC[profile]}</span>
                     </div>
+
+                    {backend && <div className="di-hint-text" data-job-id={child?.job_id ?? undefined} data-job-status={child?.view?.job_status}>
+                      <p>{child?.view?.job_status ?? (child?.job_id ? "Awaiting job view" : comparison ? "Awaiting submission" : "Not submitted")} · {child?.view?.internal_status ?? "Business outcome unavailable"}</p>
+                      <p>{child?.view?.plan_available ? "Certified witness" : "No certified witness"}{child?.view?.coverage_evaluated ? ` · ${child.view.served_orders.length} served / ${child.view.unserved_orders.length} unserved` : " · Coverage unavailable"}</p>
+                      {child?.view?.diagnostics.map((d, i) => <p key={i}>{d.code}: {d.message}</p>)}
+                      {child?.job_id && <p title={child.job_id} style={{ overflowWrap: "anywhere" }}>{child.job_id}</p>}
+                    </div>}
 
                     {/* 2×2 Metrics grid (Stitch style) */}
                     <div className="alt-metrics-grid">
@@ -984,7 +1007,7 @@ export function AdminPage() {
                       type="button"
                       aria-label={`Select ${profile}`}
                       className={`alt-view-btn ${isSelected ? "alt-view-selected" : "alt-view-outline"}`}
-                      disabled={!proposal || pending}
+                      disabled={!proposal || phaseControlsDisabled || proposalCurrency(proposal, snapshot) === "STALE"}
                       onClick={(e) => {
                         e.stopPropagation();
                         if (proposal) void invoke(() => api.selectAlternative(proposal.id));
@@ -1037,7 +1060,7 @@ export function AdminPage() {
               <button
                 className="accept-fullwidth"
                 aria-label="Accept selected plan"
-                disabled={!selected || pending}
+                disabled={!selected || phaseControlsDisabled || proposalCurrency(selected, snapshot) === "STALE"}
                 onClick={() => void invoke(() => api.acceptSelectedPlan())}
               >
                 <Check size={16} strokeWidth={2.5} />

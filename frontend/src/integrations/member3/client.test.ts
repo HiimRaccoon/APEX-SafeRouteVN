@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { Member3Client } from "./client";
 import { Member3Error } from "./errors";
+import { basis, comparison, job } from "./testFixtures";
 
 function response(data: unknown, status = 200, diagnostics: unknown[] = []) {
   return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", request_id: "trace-1",
@@ -8,6 +9,24 @@ function response(data: unknown, status = 200, diagnostics: unknown[] = []) {
 }
 
 describe("M3 HTTP boundary", () => {
+  it("compare_submits_current_revision_once and validates public reads", async () => {
+    const receipt = { schema_version: "saferoute-m3-profile-submission/1", session_id: basis.session_id, comparison_id: "comparison-test", mode: "NEW_BATCH", input_basis: basis, profiles: ["FASTEST", "BALANCED", "SAFER"], links: { poll: "/poll", cancel: "/cancel" } };
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(response(receipt, 202)).mockResolvedValueOnce(response(comparison())).mockResolvedValueOnce(response(job()));
+    const client = new Member3Client({ token: () => "test-only-bearer", fetch: fetcher });
+    const body = { request_id: "intent-1", expected_revision: { head_version: "9007199254740993", generation: "0" } };
+    await client.compareProfiles(basis.session_id, body);
+    expect(fetcher.mock.calls[0][0]).toBe("http://127.0.0.1:8000/api/sessions/session-test/profiles/compare");
+    expect(JSON.parse(fetcher.mock.calls[0][1]!.body as string)).toEqual(body);
+    expect((await client.comparison(basis.session_id, "comparison-test")).status).toBe("COMPLETED");
+    expect((await client.job(basis.session_id, "job-FASTEST")).plan_available).toBe(true);
+  });
+  it("propagates abort without reporting server cancellation", async () => {
+    const fetcher: typeof fetch = async (_url, options) => new Promise((_resolve, reject) => options?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError"))));
+    const client = new Member3Client({ token: () => "test-only-bearer", fetch: fetcher });
+    const controller = new AbortController();
+    const pending = client.state("session-test", controller.signal); controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+  });
   it("unwraps data and sends bearer only to the configured server", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response({ scenarios: [{ scenario_id: "S1" }] }));
     const client = new Member3Client({ baseUrl: "http://127.0.0.1:8000/", token: () => "test-only-bearer", fetch: fetcher });

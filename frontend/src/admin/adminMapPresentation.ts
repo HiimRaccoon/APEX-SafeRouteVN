@@ -1,5 +1,6 @@
 import { createMapScene, type MapScene, type MapSegment } from "../shared/components/mapScene";
 import type { DispatchSnapshot, ProposedAlternative } from "../shared/types/dispatch";
+import { proposalCurrency } from "../integrations/member3/revision";
 import { describeRouteLegs, vehicleRouteColor, type RouteLeg } from "../shared/components/routeLegPresentation";
 
 export const adminVehicleColor = vehicleRouteColor;
@@ -20,8 +21,7 @@ export function createAdminMapPresentation(
   const active = snapshot.planState.acceptedPlans.find((p) => p.id === snapshot.planState.activeAcceptedPlanId);
   const validSelected = selected && snapshot.planState.selectedAlternativeId === selected.id &&
     snapshot.planState.proposedAlternatives.some((p) => p.id === selected.id) &&
-    selected.generatedForSessionId === snapshot.decisionState.sessionId &&
-    selected.generatedForStateVersion === snapshot.decisionState.version ? selected : undefined;
+    proposalCurrency(selected, snapshot) === "CURRENT" ? selected : undefined;
   const plan = validSelected?.content ?? active?.plan;
   const source = validSelected ? "PROPOSED" : active ? "ACCEPTED" : null;
   const base = createMapScene(snapshot);

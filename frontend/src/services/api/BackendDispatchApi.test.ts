@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { BackendDispatchApi } from "./BackendDispatchApi";
 import { Member3Client } from "../../integrations/member3/client";
 import { createMapScene } from "../../shared/components/mapScene";
 import type { M3Vehicle, M3Projection, M3OrdersView } from "../../integrations/member3/types";
+import { comparison } from "../../integrations/member3/testFixtures";
 
 // Contract-shaped HTTP data, deliberately unrelated to frontend fixture IDs/coordinates.
 function server() {
@@ -47,6 +48,131 @@ function server() {
 }
 
 describe("BackendDispatchApi foundation", () => {
+  it("gives a session mutation priority over coalesced periodic reads and fences the late reply", async () => {
+    vi.useFakeTimers();
+    try {
+      const s = server(); let hold = false, release!: () => void, pollSignal!: AbortSignal;
+      const fetcher: typeof fetch = async (url, options) => {
+        if (hold && String(url).endsWith("/state")) { hold = false; pollSignal = options!.signal!;
+          await new Promise<void>(resolve => { release = resolve; }); }
+        return s.fetcher(url, options);
+      };
+      const api = new BackendDispatchApi({ client: new Member3Client({ fetch: fetcher, token: () => "test-only-bearer" }), storage: s.storage });
+      await api.loadScenario("S1"); const published: string[] = []; const unsub = api.subscribe(next => published.push(next.decisionState.scenarioId));
+      hold = true; await vi.advanceTimersByTimeAsync(2500);
+      const next = api.loadScenario("S0"); expect(pollSignal.aborted).toBe(true);
+      await vi.advanceTimersByTimeAsync(10000);
+      expect(s.requests.filter(r => r.path.endsWith("/load"))).toHaveLength(1);
+      release(); expect((await next).decisionState.scenarioId).toBe("S0");
+      expect(published).toEqual(["S0"]); unsub();
+      const readCount = s.requests.length; await vi.advanceTimersByTimeAsync(10000); expect(s.requests).toHaveLength(readCount);
+    } finally { vi.useRealTimers(); }
+  });
+  it("definite STALE_HEAD refreshes world and permits a new explicit intent", async () => {
+    const s = server(); let rejected = true; const posts: string[] = [];
+    const fetcher: typeof fetch = async (url, options) => {
+      if (String(url).endsWith("/profiles/compare")) {
+        posts.push(options!.body as string);
+        if (rejected) { rejected = false; s.state.basis.generation = "1";
+          return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", request_id: "trace", status: "ERROR", data: null, diagnostics: [{ code: "STALE_HEAD", path: "compare", message: "World changed" }] }), { status: 409 }); }
+        const receipt = { schema_version: "saferoute-m3-profile-submission/1", session_id: s.state.basis.session_id, comparison_id: "comparison-new", mode: "NEW_BATCH", input_basis: s.state.basis, profiles: ["FASTEST", "BALANCED", "SAFER"], links: { poll: "/poll", cancel: "/cancel" } };
+        return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", request_id: "trace", status: "OK", data: receipt, diagnostics: [] }));
+      }
+      return s.fetcher(url, options);
+    };
+    const api = new BackendDispatchApi({ client: new Member3Client({ fetch: fetcher, token: () => "test-only-bearer" }), storage: s.storage }); await api.loadScenario("S1");
+    await expect(api.optimize()).rejects.toMatchObject({ code: "STALE_HEAD" });
+    expect((await api.getSnapshot()).backend?.basis.generation).toBe("1"); expect(posts).toHaveLength(1);
+    await api.optimize(); expect(posts).toHaveLength(2);
+    expect(JSON.parse(posts[1]).request_id).not.toBe(JSON.parse(posts[0]).request_id);
+    expect(JSON.parse(posts[1]).expected_revision.generation).toBe("1");
+  });
+  it("does not submit an undurable intent after storage fails then Refresh", async () => {
+    const s = server(); let failedWrites = 0, posts = 0;
+    const storage = { getItem: s.storage.getItem, setItem: (k: string, v: string) => { if (k.includes("command.v1")) { failedWrites++; throw new Error("Storage unavailable"); } s.storage.setItem(k, v); } };
+    const fetcher: typeof fetch = async (url, options) => { if (String(url).endsWith("/profiles/compare")) { posts++; throw new Error("Must not submit"); } return s.fetcher(url, options); };
+    const api = new BackendDispatchApi({ client: new Member3Client({ fetch: fetcher, token: () => "test-only-bearer" }), storage }); await api.loadScenario("S1");
+    await expect(api.optimize()).rejects.toThrow();
+    await api.getSnapshot().catch(() => {});
+    expect(failedWrites).toBeGreaterThan(0); expect(posts).toBe(0);
+  });
+  it("retains the same recovery ID when comparison pointer persistence fails", async () => {
+    const s = server(); let failPointer = true; const posts: string[] = [];
+    const storage = { getItem: s.storage.getItem, setItem: (k: string, v: string) => { if (failPointer && k.includes("session.v1") && JSON.parse(v).comparison) throw new Error("Pointer unavailable"); s.storage.setItem(k, v); } };
+    const receipt = { schema_version: "saferoute-m3-profile-submission/1", session_id: s.state.basis.session_id, comparison_id: "comparison-stable", mode: "NEW_BATCH", input_basis: s.state.basis, profiles: ["FASTEST", "BALANCED", "SAFER"], links: { poll: "/poll", cancel: "/cancel" } };
+    const fetcher: typeof fetch = async (url, options) => {
+      if (String(url).endsWith("/profiles/compare")) { posts.push(options!.body as string); return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", request_id: "trace", status: "OK", data: receipt, diagnostics: [] })); }
+      return s.fetcher(url, options);
+    };
+    const client = new Member3Client({ fetch: fetcher, token: () => "test-only-bearer" });
+    const api = new BackendDispatchApi({ client, storage }); await api.loadScenario("S1");
+    await expect(api.optimize()).rejects.toThrow(); failPointer = false;
+    const next = await new BackendDispatchApi({ client, storage }).getSnapshot();
+    expect(posts).toHaveLength(2); expect(posts[1]).toBe(posts[0]); expect(next.backend?.comparison?.comparison_id).toBe("comparison-stable");
+  });
+  it.each([[401, "UNAUTHORIZED"], [403, "FORBIDDEN"], [409, "IDEMPOTENCY_CONFLICT"]])("fails closed for %s/%s and retains the exact intent", async (status, code) => {
+    const s = server(); const posts: string[] = [];
+    const fetcher: typeof fetch = async (url, options) => {
+      if (String(url).endsWith("/profiles/compare")) { posts.push(options!.body as string); return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", request_id: "trace", status: "ERROR", data: null, diagnostics: [{ severity: "ERROR", code, path: "compare", message: "Rejected" }] }), { status: status as number }); }
+      return s.fetcher(url, options);
+    };
+    const api = new BackendDispatchApi({ client: new Member3Client({ fetch: fetcher, token: () => "test-only-bearer" }), storage: s.storage }); await api.loadScenario("S1");
+    await expect(api.optimize()).rejects.toMatchObject({ code });
+    await expect(api.getSnapshot()).rejects.toMatchObject({ code });
+    expect(posts).toHaveLength(2); expect(posts[1]).toBe(posts[0]);
+    await expect(api.loadScenario("S0")).rejects.toMatchObject({ code: "PENDING_COMMAND" });
+  });
+  it("retries BUSY with bounded backoff and the same body", async () => {
+    vi.useFakeTimers();
+    try {
+      const s = server(); let posts = 0; const bodies: string[] = [];
+      const fetcher: typeof fetch = async (url, options) => {
+        if (String(url).endsWith("/profiles/compare")) { posts++; bodies.push(options!.body as string); return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", request_id: "trace", status: "ERROR", data: null, diagnostics: [{ severity: "ERROR", code: "RUNTIME_BUSY", path: "compare", message: "Busy" }] }), { status: 503 }); }
+        return s.fetcher(url, options);
+      };
+      const api = new BackendDispatchApi({ client: new Member3Client({ fetch: fetcher, token: () => "test-only-bearer" }), storage: s.storage }); await api.loadScenario("S1");
+      const failed = expect(api.optimize()).rejects.toMatchObject({ code: "RUNTIME_BUSY" });
+      await vi.advanceTimersByTimeAsync(7001); await failed;
+      expect(posts).toBe(4); expect(new Set(bodies).size).toBe(1);
+    } finally { vi.useRealTimers(); }
+  });
+  it("compare_submits_current_revision_once and survives lost reply/refresh", async () => {
+    const s = server(); const posts: string[] = []; let lose = true;
+    const receipt = { schema_version: "saferoute-m3-profile-submission/1", session_id: s.state.basis.session_id, comparison_id: "comparison-test", mode: "NEW_BATCH", input_basis: s.state.basis, profiles: ["FASTEST", "BALANCED", "SAFER"], links: { poll: "/poll", cancel: "/cancel" } };
+    const fetcher: typeof fetch = async (url, options) => {
+      if (String(url).endsWith("/profiles/compare")) { posts.push(options!.body as string); if (lose) { lose = false; throw new TypeError("Lost reply"); }
+        return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", request_id: "trace", status: "OK", data: receipt, diagnostics: [] }), { status: 202 }); }
+      return s.fetcher(url, options);
+    };
+    const client = new Member3Client({ fetch: fetcher, token: () => "test-only-bearer" });
+    const api = new BackendDispatchApi({ client, storage: s.storage }); await api.loadScenario("S1");
+    await expect(api.optimize()).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+    const next = await new BackendDispatchApi({ client, storage: s.storage }).getSnapshot();
+    expect(posts).toHaveLength(2); expect(posts[1]).toBe(posts[0]);
+    expect(JSON.parse(posts[0])).toMatchObject({ expected_revision: { head_version: "2", generation: "0" } });
+    expect(JSON.parse(posts[0])).not.toHaveProperty("job_ids");
+    expect(next.backend?.comparison).toMatchObject({ comparison_id: "comparison-test", status: "QUEUED" });
+    expect(next.planState.proposedAlternatives).toEqual([]); expect(next.backend?.basis).toEqual(s.state.basis);
+  });
+  it("publishes bound lifecycle and preserves registry on fresh world reads", async () => {
+    const s = server(); const c = comparison(); c.session_id = s.state.basis.session_id; c.input_basis = { ...s.state.basis };
+    for (const j of c.jobs) j.view.input_basis = { ...s.state.basis };
+    for (const j of c.outcome.comparison.jobs) j.basis = { ...s.state.basis };
+    const receipt = { schema_version: "saferoute-m3-profile-submission/1", session_id: c.session_id, comparison_id: c.comparison_id, mode: "NEW_BATCH", input_basis: c.input_basis, profiles: ["FASTEST", "BALANCED", "SAFER"], links: c.links };
+    const fetcher: typeof fetch = async (url, options) => {
+      const path = new URL(String(url)).pathname;
+      if (path.includes("/profiles/")) return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", request_id: "trace", status: "OK", data: path.endsWith("/compare") ? receipt : c, diagnostics: [] }));
+      return s.fetcher(url, options);
+    };
+    const api = new BackendDispatchApi({ client: new Member3Client({ fetch: fetcher, token: () => "test-only-bearer" }), storage: s.storage });
+    await api.loadScenario("S1"); await api.optimize();
+    const refreshed = await api.getSnapshot();
+    expect(refreshed.backend?.comparison?.status).toBe("COMPLETED");
+    expect(Object.keys(refreshed.backend?.jobs ?? {})).toHaveLength(3);
+    s.state.basis.generation = "1";
+    const newer = await api.getSnapshot(); expect(newer.backend?.comparison?.input_basis.generation).toBe("0");
+    expect(newer.backend?.basis.generation).toBe("1");
+  });
   it("renders server-owned world, preserving IDs, units, depot/delivery kinds and empty plans", async () => {
     const s = server();
     const api = new BackendDispatchApi({ client: s.client, storage: s.storage });
@@ -149,7 +275,7 @@ describe("BackendDispatchApi foundation", () => {
   it("refuses Phase 2 actions without performing HTTP mutations", async () => {
     const s = server();
     const api = new BackendDispatchApi({ client: s.client, storage: s.storage });
-    for (const action of [() => api.optimize(), () => api.selectAlternative("x"), () => api.acceptSelectedPlan(), () => api.triggerFixtureEvent("x"),
+    for (const action of [() => api.selectAlternative("x"), () => api.acceptSelectedPlan(), () => api.triggerFixtureEvent("x"),
       () => api.setUrgentOrderEnabled(true), () => api.pickupOrder({ vehicleId: "v", orderId: "o" }), () => api.deliverOrder({ vehicleId: "v", orderId: "o" }),
       () => api.advanceDemoClock(10), () => api.resetDemoSession()]) {
       await expect(action()).rejects.toMatchObject({ code: "PHASE_NOT_SUPPORTED" });

@@ -83,3 +83,31 @@ export interface M3Catalog {
 }
 export interface M3Capabilities { schema_version: "task02-m2-runtime-capabilities/1"; build_sha256: string; [key: string]: unknown }
 export interface M3Ready { ready: boolean; checks: Record<string, string>; execution_mode: "SIMULATED_REPLAY" }
+
+export type M3JobStatus = "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED";
+export type ComparisonStatus = "QUEUED" | "RUNNING" | "CANCEL_REQUESTED" | "COMPLETED" | "FAILED" | "CANCELLED";
+export interface M3JobView {
+  schema_version: "task02-m2-runtime-job-view/1"; job_id: string; job_status: M3JobStatus; input_basis: M3Basis;
+  business_status: string | null; internal_status: string | null; diagnostics: Array<{ code: string; path: string; message: string; severity?: string }>;
+  validation: { status: string; valid: boolean | null; validator_version?: string };
+  coverage_evaluated: boolean; served_orders: string[]; unserved_orders: Array<{ order_id: string; reason: string }>;
+  plan_available: boolean; execution_view_required: true; public_api_v1_dynamic_plan_available: false;
+}
+export interface M3ComparisonReceipt {
+  schema_version: "saferoute-m3-profile-submission/1"; session_id: string; comparison_id: string;
+  mode: "NEW_BATCH" | "EXISTING_JOBS"; input_basis: M3Basis; profiles: import("../../shared/types/dispatch").PlanProfile[];
+  links: { poll: string; cancel: string };
+}
+export interface M3ComparisonView {
+  schema_version: "saferoute-m3-profile-comparison/1"; session_id: string; comparison_id: string;
+  mode: "NEW_BATCH" | "EXISTING_JOBS"; status: ComparisonStatus; input_basis: M3Basis;
+  jobs: Array<{ profile: import("../../shared/types/dispatch").PlanProfile; job_id: string | null; view: M3JobView | null }>;
+  outcome: { reason: string | null; comparison: {
+    schema_version: "task02-m2-runtime-comparison/1"; status: "COMPARABLE" | "NON_COMPARABLE"; reason: string | null;
+    jobs: Array<{ job_id: string; profile: import("../../shared/types/dispatch").PlanProfile; basis: M3Basis; domain_sha256: string; metrics: Record<string, number> }>;
+  } | null } | null;
+  links: { poll: string; cancel: string }; execution_mode: "SIMULATED_REPLAY"; real_world_observation: false;
+  metric_scope: "FORECAST_ONLY"; exposure_is_proxy: true;
+}
+export interface CompareProfilesRequest { request_id: string; expected_revision: { head_version: string; generation: string } }
+export interface M3ComparisonCancellation { schema_version: "saferoute-m3-profile-cancellation/1"; session_id: string; comparison_id: string; status: "CANCEL_REQUESTED" | "COMPLETED_IMMUTABLE"; affects_existing_jobs: false }

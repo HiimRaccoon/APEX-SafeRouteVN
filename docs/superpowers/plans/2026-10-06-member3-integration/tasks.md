@@ -7,7 +7,7 @@
 | Phase | Trạng thái tại lúc viết | Điều kiện ra phase |
 | --- | --- | --- |
 | 1 — Foundation | Load/read S1 native đã PASS | Baseline tests khi bắt đầu Phase 2; không làm lại code Foundation. |
-| 2 — Optimize | Chưa triển khai | String revision + real comparison + lifecycle/polling/error gate. |
+| 2 — Optimize | PASS native S1, 196 tests; 2026-10-07 | String revision + real comparison + lifecycle/polling/error gate. |
 | 3 — Map + KPI | Chưa triển khai; proposal forecast contract cần M3 | Native geometry preview read-only, metrics/provenance/scopes đúng. |
 | 4 — Select + Accept | Chưa triển khai | Local Select + certified current-basis Accept + server state. |
 | 5 — Event + Re-optimization | Chưa triển khai | Native S2/S3/S4 barrier/apply/re-optimize đúng. |
@@ -41,31 +41,31 @@ File paths là từ root repo. Lệnh npm và node bên dưới chạy trong `fr
 
 **Đã có trước task này:** Number conversion removed; full int64 strings/generation-only refresh/projection mismatch/malformed revision regressions PASS trong BackendDispatchApi tests. Backend `version=0` chỉ là mock compatibility. Các checkbox dưới vẫn mở vì centralized helpers và proposal/job consumers chưa triển khai.
 
-- [ ] Viết test `preserves_int64_revision_strings`: `head_version="9007199254740993"`, `generation="9223372036854775807"` map/serialize nguyên giá trị, không reject vì JS safe integer; reject `01`, số JS, negative và `9223372036854775808`.
-- [ ] Viết test `full_basis_detects_generation_and_hash_changes`: generation-only, head/source/context/overlay/build/session thay đổi → STALE; bằng đủ 9 fields → CURRENT.
-- [ ] Chạy revision/API helper tests thấy FAIL vì helpers chưa có; implement full-basis currency/expected revision/job guard; giữ numeric mock lifecycle và backend placeholder 0; dùng centralized currency guard trên mọi Admin/map Select validity consumer khi nối real jobs.
-- [ ] Targeted PASS + typecheck/build; full mock suite giữ behavior. Ghi receipt và commit task.
+- [x] Viết test `preserves_int64_revision_strings`: `head_version="9007199254740993"`, `generation="9223372036854775807"` map/serialize nguyên giá trị, không reject vì JS safe integer; reject `01`, số JS, negative và `9223372036854775808`.
+- [x] Viết test `full_basis_detects_generation_and_hash_changes`: generation-only, head/source/context/overlay/build/session thay đổi → STALE; bằng đủ 9 fields → CURRENT.
+- [x] Chạy revision/API helper tests thấy FAIL vì helpers chưa có; implement full-basis currency/expected revision/job guard; giữ numeric mock lifecycle và backend placeholder 0; dùng centralized currency guard trên mọi Admin/map Select validity consumer khi nối real jobs.
+- [x] Targeted PASS + typecheck/build; full mock suite giữ behavior. Ghi receipt và commit task.
 
 ### P2-02 — Real comparison submit/job lifecycle/errors/idempotency
 
 **Dependencies:** P2-01. **Files:** modify member3 `client.ts/types.ts/errors.ts`, BackendDispatchApi/shared types/AdminPage; new `jobViewAdapter.ts`, `jobViewAdapter.test.ts`, `requestId.ts`, `requestId.test.ts`, `scenarioAdapter.ts`, `scenarioAdapter.test.ts`; extend existing client/API tests. **Consumes:** expectedRevision/PendingCommandStore/M3Catalog. **Produces:** typed compare/job/cancel methods, parsed job/group registry trên snapshot backend metadata, optimize submit/watch seed, adaptScenarioCatalog cho selector.
 
-- [ ] Test `compare_submits_current_revision_once`: POST `/profiles/compare`, no `job_ids`, expected_revision giữ strings; timeout/lost reply → cùng request_id/body khi retry/refresh, không tạo thêm batch.
-- [ ] Test `distinguishes_lifecycle_from_business_outcome`: QUEUED/RUNNING/COMPLETED/FAILED, COMPLETED no witness, PARTIAL, RETURN_ONLY, FAILED+JOB_CANCELLED; no-witness không thành all-unserved hoặc fake plan.
-- [ ] Test `comparison_verdict_controls_ranking`: COMPARABLE với ba metrics trùng nhau vẫn valid; NON_COMPARABLE hoặc outcome.comparison=null không rank và không fake comparative KPI.
-- [ ] Test `scenario_selector_uses_server_catalog`: S0–S4 counts/time/fixture hashes match catalog, S5–S8 không làm UI hỗ trợ giả; backend selector không dùng fixtureCatalog hoặc demo order counts.
-- [ ] Test errors 401/403/409 và invalid binding fail closed; BUSY bounded retry; idempotency conflict không tạo new request. Thấy FAIL trước implement client/parser/store/API/UI status (giữ layout).
-- [ ] Targeted PASS + typecheck/build; evidence bao gồm comparison/job IDs khi native harness P2-03 chạy.
+- [x] Test `compare_submits_current_revision_once`: POST `/profiles/compare`, no `job_ids`, expected_revision giữ strings; timeout/lost reply → cùng request_id/body khi retry/refresh, không tạo thêm batch.
+- [x] Test `distinguishes_lifecycle_from_business_outcome`: QUEUED/RUNNING/COMPLETED/FAILED, COMPLETED no witness, PARTIAL, RETURN_ONLY, FAILED+JOB_CANCELLED; no-witness không thành all-unserved hoặc fake plan.
+- [x] Test `comparison_verdict_controls_ranking`: COMPARABLE với ba metrics trùng nhau vẫn valid; NON_COMPARABLE hoặc outcome.comparison=null không rank và không fake comparative KPI.
+- [x] Test `scenario_selector_uses_server_catalog`: S0–S4 counts/time/fixture hashes match catalog, S5–S8 không làm UI hỗ trợ giả; backend selector không dùng fixtureCatalog hoặc demo order counts.
+- [x] Test errors 401/403/409 và invalid binding fail closed; BUSY bounded retry; idempotency conflict không tạo new request. Thấy FAIL trước implement client/parser/store/API/UI status (giữ layout).
+- [x] Targeted PASS + typecheck/build; evidence bao gồm comparison/job IDs khi native harness P2-03 chạy.
 
 ### P2-03 — Single polling coordinator và native Optimize gate
 
 **Dependencies:** P2-02. **Files:** new `polling.ts`, `polling.test.ts`, `capabilities.ts`; modify BackendDispatchApi, client abort signals, Context/Admin state/tests; new `frontend/docs/evidence/member3-integration/browser.mjs`. **Consumes:** readWorld/readComparison, job terminal/verdict and subscribe. **Produces:** PollCoordinator theo plan, capabilities and reusable browser harness CLI.
 
-- [ ] Fake-clock test `polls_without_overlap_and_stops_terminal`: comparison 1000 ms/world 2500 ms **sau completion**, one request kind in flight, no panel timers; terminal group stop, không mỗi child thêm poll loop.
-- [ ] Test `aborts_stale_session_and_unmount`: hidden/resume, unsubscribe/StrictMode, late old-session response ignored; mutation queue ưu tiên khỏi periodic read backlog; errors giữ snapshot stale/actions disabled.
-- [ ] Test `bounded_retries_and_deadline`: backoff 1000/2000/4000 ms tối đa 3 retry, 10-minute deadline báo unknown thay FAILED/CANCELLED; server cancel chỉ qua real cancel endpoint, abort không fake cancel.
-- [ ] Quan sát FAIL → implement coordinator/subscribe/capabilities + harness `--phase N --scenario Sx`/`--all`; targeted/full tests, typecheck/build PASS.
-- [ ] Native `node docs/evidence/member3-integration/browser.mjs --phase 2 --scenario S1`: POST M3 compare thật, 3 profiles/jobs, basis/lifecycle/verdict/error evidence; no offline call. Gate Phase 2 và cập nhật evidence paths.
+- [x] Fake-clock test `polls_without_overlap_and_stops_terminal`: comparison 1000 ms/world 2500 ms **sau completion**, one request kind in flight, no panel timers; terminal group stop, không mỗi child thêm poll loop.
+- [x] Test `aborts_stale_session_and_unmount`: hidden/resume, unsubscribe/StrictMode, late old-session response ignored; mutation queue ưu tiên khỏi periodic read backlog; errors giữ snapshot stale/actions disabled.
+- [x] Test `bounded_retries_and_deadline`: backoff 1000/2000/4000 ms tối đa 3 retry, 10-minute deadline báo unknown thay FAILED/CANCELLED; server cancel chỉ qua real cancel endpoint, abort không fake cancel.
+- [x] Quan sát FAIL → implement coordinator/subscribe/capabilities + harness `--phase N --scenario Sx`/`--all`; targeted/full tests, typecheck/build PASS.
+- [x] Native `node docs/evidence/member3-integration/browser.mjs --phase 2 --scenario S1`: POST M3 compare thật, 3 profiles/jobs, basis/lifecycle/verdict/error evidence; no offline call. Gate Phase 2 và cập nhật evidence paths.
 
 ## Phase 3 — Map + KPI từ kết quả backend
 
@@ -199,7 +199,8 @@ File paths là từ root repo. Lệnh npm và node bên dưới chạy trong `fr
 | Nội dung | Artifact / trạng thái |
 | --- | --- |
 | Foundation native S1 | Existing [browser receipt](../../../../frontend/docs/evidence/m3-phase1-browser-results.json), [HTTP](../../../../frontend/docs/evidence/m3-phase1-http-responses.json), [verification](../../../../frontend/docs/evidence/m3-phase1-verification.json). |
-| Phase 2–6 | Chưa có; khi chạy lưu dưới `frontend/docs/evidence/member3-integration/` với phase/run timestamps. |
+| Phase 2 | [Native S1](../../../../frontend/docs/evidence/member3-integration/phase2-latest.json), [verification](../../../../frontend/docs/evidence/member3-integration/verification.json), [review fixes](../../../../frontend/docs/evidence/member3-integration/review.md). 196 tests/typecheck/build PASS; comparison COMPARABLE, physical world unchanged. |
+| Phase 3–6 | Chưa triển khai; giữ các gate của từng phase. |
 | Forecast public contract | Chưa bàn giao; P3-01 pending, không giả có geometry endpoint. |
 | Pre-cleanup E2E / post-cleanup E2E | Chưa chạy; hai receipts riêng bắt buộc, không dùng Foundation receipt thay. |
 | Artifact/import/secret audit | Chưa chạy cho migration đầy đủ; cần backend production build thực tế P7. |

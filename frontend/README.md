@@ -12,8 +12,11 @@ Unmatched execution worlds fall back to explicitly schematic demo plans.
 The Member 3 backend foundation now supports authenticated readiness, runtime
 capabilities, scenario catalog/load, and current session world reads. Select
 `VITE_DISPATCH_MODE=backend` or `mock`; see [M3 Phase 1](docs/member3-phase1.md).
-Optimize/Select/Accept/Event/Pickup/Delivered/Replay remain unchanged in mock mode;
-backend mode reports these actions as not connected in this phase.
+Backend Phase 2 now submits real three-profile Optimize comparisons, tracks
+job lifecycle/verdict and supports durable retry/cancel plus bounded polling;
+see [M3 Phase 2](docs/member3-phase2.md). Select/Accept/Event/Pickup/Delivered/Replay
+remain deferred in backend mode. Mock/offline behavior remains unchanged.
+The current migration tracker is [Member 3 integration tasks](../docs/superpowers/plans/2026-10-06-member3-integration/tasks.md).
 
 ## Run locally
 

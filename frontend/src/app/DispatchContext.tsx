@@ -48,9 +48,14 @@ export function DispatchProvider({ api = getDefaultApi(), children }: { api?: Di
     setSnapshot(null);
     setPending(true);
     setError(null);
-    const unsubscribe = api.subscribe((next) => { if (active) setSnapshot(next); });
+    const unsubscribe = api.subscribe((next) => {
+      if (active) {
+        setSnapshot(next);
+        if (next.backend) setError(next.backend.error ? `${next.backend.error.code}: ${next.backend.error.message}` : null);
+      }
+    });
     void api.getSnapshot()
-      .then((next) => { if (active) setSnapshot(next); })
+      .then((next) => { if (active) { setSnapshot(next); if (next.backend?.error) setError(`${next.backend.error.code}: ${next.backend.error.message}`); } })
       .catch((reason) => { if (active) setError(toMessage(reason)); })
       .finally(() => { if (active) setPending(false); });
     return () => { active = false; unsubscribe(); };

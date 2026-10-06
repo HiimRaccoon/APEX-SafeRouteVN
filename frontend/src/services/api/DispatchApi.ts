@@ -2,6 +2,8 @@ import type { DispatchSnapshot } from "../../shared/types/dispatch";
 import type { ScenarioId } from "../../shared/types/scenario";
 
 export interface DispatchApi {
+  capabilities?(): Promise<import("../../integrations/member3/capabilities").DispatchCapabilities>;
+  cancelComparison?(): Promise<DispatchSnapshot>;
   getSnapshot(): Promise<DispatchSnapshot>;
   subscribe(listener: (snapshot: DispatchSnapshot) => void): () => void;
   loadScenario(id: ScenarioId): Promise<DispatchSnapshot>;
