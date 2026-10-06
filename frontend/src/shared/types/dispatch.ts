@@ -126,6 +126,15 @@ export interface DemoEventSummary {
 }
 
 export interface DispatchSnapshot {
+  /** M3 transport metadata; mock snapshots keep their existing shape. */
+  backend?: {
+    source: "MEMBER3_HTTP";
+    baseUrl: string;
+    executionMode: "SIMULATED_REPLAY";
+    realWorldObservation: false;
+    basis: import("../../integrations/member3/types").M3Basis;
+    executionView: import("../../integrations/member3/types").M3ExecutionView;
+  };
   decisionState: DecisionState;
   planState: PlanState;
   executionState: ExecutionState;

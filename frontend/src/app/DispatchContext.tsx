@@ -2,10 +2,12 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { DispatchSnapshot } from "../shared/types/dispatch";
 import type { DispatchApi } from "../services/api/DispatchApi";
-import { MockDispatchApi } from "../services/api/MockDispatchApi";
+import { createDispatchApi } from "../services/api/createDispatchApi";
+import { Member3Error } from "../integrations/member3/errors";
 import { DispatchError, type DispatchErrorCode } from "../mocks/engine/MockStateEngine";
 
-const defaultApi = new MockDispatchApi();
+let defaultApi: DispatchApi | undefined;
+function getDefaultApi() { return defaultApi ??= createDispatchApi(); }
 
 interface DispatchContextValue {
   api: DispatchApi;
@@ -31,19 +33,27 @@ const errorMessages: Record<DispatchErrorCode, string> = {
 };
 
 function toMessage(error: unknown): string {
+  if (error instanceof Member3Error) return `${error.code}: ${error.message}${error.requestId ? ` (request ${error.requestId})` : ""}`;
   if (error instanceof DispatchError) return errorMessages[error.code];
   return "The demo action could not be completed.";
 }
 
-export function DispatchProvider({ api = defaultApi, children }: { api?: DispatchApi; children: ReactNode }) {
+export function DispatchProvider({ api = getDefaultApi(), children }: { api?: DispatchApi; children: ReactNode }) {
   const [snapshot, setSnapshot] = useState<DispatchSnapshot | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    void api.getSnapshot().then((next) => { if (active) setSnapshot(next); });
-    return api.subscribe((next) => { if (active) setSnapshot(next); });
+    setSnapshot(null);
+    setPending(true);
+    setError(null);
+    const unsubscribe = api.subscribe((next) => { if (active) setSnapshot(next); });
+    void api.getSnapshot()
+      .then((next) => { if (active) setSnapshot(next); })
+      .catch((reason) => { if (active) setError(toMessage(reason)); })
+      .finally(() => { if (active) setPending(false); });
+    return () => { active = false; unsubscribe(); };
   }, [api]);
 
   const value = useMemo<DispatchContextValue>(() => ({

@@ -401,7 +401,7 @@ export function DriverPage() {
     return (
       <main className="drv-page-loading">
         <div className="drv-spinner" />
-        <span>Loading Driver workspace…</span>
+        <span role={error ? "alert" : undefined}>{error ?? "Loading Driver workspace…"}</span>
       </main>
     );
   }

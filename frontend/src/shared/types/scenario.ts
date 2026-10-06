@@ -4,6 +4,9 @@ export type VehicleAvailability = "AVAILABLE" | "UNAVAILABLE";
 
 export interface Location {
   id: string;
+  kind?: "DEPOT" | "DELIVERY";
+  orderId?: string;
+  graphNodeId?: string | number;
   latitude: number;
   longitude: number;
   openingTime: string;
@@ -26,7 +29,7 @@ export interface Order {
   preferredDue: string;
   hardDeadline: string;
   serviceTimeHours: number;
-  graphNodeId: number;
+  graphNodeId: number | string;
 }
 
 export interface Vehicle {
@@ -36,8 +39,8 @@ export interface Vehicle {
   capacityKg: number;
   currentLoadKg: number;
   onboardOrderIds: string[];
-  currentPosition: { latitude: number; longitude: number; graphNodeId: number };
-  positionTimestamp: string;
+  currentPosition: { latitude: number; longitude: number; graphNodeId: number | string | null };
+  positionTimestamp: string | null;
   workingStart: string;
   workingEnd: string;
   [key: string]: unknown;

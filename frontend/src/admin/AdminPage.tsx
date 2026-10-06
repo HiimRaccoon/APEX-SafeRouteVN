@@ -102,7 +102,7 @@ export function AdminPage() {
   /* Priority selector for Order Entry form */
   const [orderPriority, setOrderPriority] = useState<'Normal' | 'Urgent'>('Normal');
 
-  if (!snapshot) return <main className="page-loading">Loading dispatch workspace…</main>;
+  if (!snapshot) return <main className="page-loading" role={error ? "alert" : undefined}>{error ?? "Loading dispatch workspace…"}</main>;
 
   const selected = snapshot.planState.proposedAlternatives.find(
     (plan) => plan.id === snapshot.planState.selectedAlternativeId
@@ -166,7 +166,7 @@ export function AdminPage() {
       : null;
 
   return (
-    <main className="admin-page">
+    <main className="admin-page" data-session-id={snapshot.decisionState.sessionId} data-dispatch-source={snapshot.backend?.source ?? "MOCK"} data-execution-mode={snapshot.backend?.executionMode}>
       <h1 className="sr-only">SafeRoute VN Dispatcher Workspace (Điều phối)</h1>
 
       {/* ── Top Navigation Bar ── */}
@@ -212,7 +212,7 @@ export function AdminPage() {
             </span>
           </div>
 
-          <div className="clock-display" title="Demo time">
+          <div className="clock-display" title={snapshot.backend ? `${snapshot.backend.executionMode} · M3 session ${snapshot.decisionState.sessionId}` : "Demo time"}>
             <Clock size={13} strokeWidth={2} />
             <span>Demo time: {snapshot.demoClock.now}</span>
           </div>
@@ -596,6 +596,7 @@ export function AdminPage() {
                 <div className="scenario-body">
                   <select
                     className="fleet-select"
+                    disabled={pending}
                     value={snapshot.decisionState.scenarioId}
                     onChange={(ev) =>
                       void invoke(() =>

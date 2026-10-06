@@ -56,7 +56,7 @@ export function createMapScene(snapshot: DispatchSnapshot, proposed?: ProposedAl
     proposed: preview,
     rain: snapshot.decisionState.context.rain?.polygon ?? null,
     markers: [
-      ...snapshot.decisionState.locations.map((location): MapMarker => ({
+      ...snapshot.decisionState.locations.filter((location) => location.kind !== "DELIVERY").map((location): MapMarker => ({
         id: location.id, kind: "depot", coordinates: [location.longitude, location.latitude], label: `Depot ${location.id}`
       })),
       ...snapshot.decisionState.orders.filter((order) => !driverOrderIds || driverOrderIds.has(order.id)).map((order): MapMarker => ({

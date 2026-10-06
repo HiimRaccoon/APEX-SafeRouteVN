@@ -9,7 +9,11 @@ Their supplied geometry, assignment and forecast metrics are consumed together.
 Five exact post-event worlds also use locally computed M2 forecasts, with
 independent raw-source validation and a bounded subset candidate policy.
 Unmatched execution worlds fall back to explicitly schematic demo plans.
-Live backend integration remains Phase 2.
+The Member 3 backend foundation now supports authenticated readiness, runtime
+capabilities, scenario catalog/load, and current session world reads. Select
+`VITE_DISPATCH_MODE=backend` or `mock`; see [M3 Phase 1](docs/member3-phase1.md).
+Optimize/Select/Accept/Event/Pickup/Delivered/Replay remain unchanged in mock mode;
+backend mode reports these actions as not connected in this phase.
 
 ## Run locally
 
