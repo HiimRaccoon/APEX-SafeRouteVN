@@ -25,6 +25,9 @@ def production_inventory(repo):
         if p.is_file() and p.suffix in ('.py','.json') and not {'tests','evaluation','__pycache__'}.intersection(r.parts):paths.add(r.as_posix())
     for p in (repo/'configs').rglob('*.json'):paths.add(p.relative_to(repo).as_posix())
     for p in (repo/'optimization/runtime').glob('*.mjs'):paths.add(p.relative_to(repo).as_posix())
+    # Public handoff verification requires this frozen document as well as code.
+    crosswalk='docs/step7_INTEGRATION_CROSSWALK.md'
+    if (repo/crosswalk).is_file():paths.add(crosswalk)
     for r in ('shared/__init__.py','shared/contracts/__init__.py','shared/contracts/task02_api_v1.py','shared/contracts/task02_api_v1.schema.json'):
         if (repo/r).is_file():paths.add(r)
     if (repo/'runtime_entry.py').is_file():paths.add('runtime_entry.py')

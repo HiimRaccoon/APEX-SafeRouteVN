@@ -1,13 +1,13 @@
 """Public M3 SDK surface. Never accepts client state, paths or trust records.
 
-Change Impact Analysis: additive facade SDK /1. Server-owned install/snapshot/
+Change Impact Analysis: additive forecast facade SDK /2. Server-owned install/snapshot/
 store are supplied once. M4 consumes the execution-view, not this private DB.
 Administrative commands must not be exposed as unauthenticated HTTP endpoints.
 """
 from .facade import Runtime
 from .protocol import VERSION,require,sha
 
-VERSION_SDK='task02-m2-runtime-sdk/1'
+VERSION_SDK='task02-m2-runtime-sdk/2'
 
 class RuntimeClient:
     def __init__(self,*,snapshot_root,store_path,expected_build_sha256):

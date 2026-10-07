@@ -3,6 +3,7 @@ backend/** -text
 configs/member1_dynamic_step5.json -text
 configs/member1_profiles_step3.json -text
 configs/member1_rain_step6.json -text
+docs/step7_INTEGRATION_CROSSWALK.md -text
 optimization/__init__.py -text
 optimization/candidate_paths/__init__.py -text
 optimization/candidate_paths/generator.py -text

@@ -1,7 +1,7 @@
 {
-  "schema_version": "task02-m2-runtime-handoff-contract-lock/1",
+  "schema_version": "task02-m2-runtime-handoff-contract-lock/2",
   "api_v1": "FROZEN_EXTERNAL_CONTRACT_UNCHANGED",
-  "sdk_version": "task02-m2-runtime-sdk/1",
+  "sdk_version": "task02-m2-runtime-sdk/2",
   "command_version": "task02-m2-runtime-command/1",
   "response_version": "task02-m2-runtime-response/1",
   "execution_view_version": "task02-m2-execution-view/2",
@@ -13,8 +13,21 @@
     "validate_session",
     "backup",
     "job_view",
-    "compare_profiles"
+    "compare_profiles",
+    "job_forecast"
   ],
+  "forecast_view_version": "task02-m2-job-forecast/1",
+  "forecast_metric_scope": "FORECAST_ONLY",
+  "forecast_units": {
+    "distance": "m",
+    "duration": "s",
+    "action_time": "us",
+    "cost": "VND",
+    "mass": "kg",
+    "geometry_crs": "WGS84",
+    "geometry_order": "longitude_latitude",
+    "exposure": "PROXY"
+  },
   "units": {
     "mass": "kg",
     "distance": "m",
@@ -44,8 +57,8 @@
   "upgrade": "Explicit server-admin CAS + raw current checker receipt + locked consumer compatibility; old workers fenced; historical result bytes immutable",
   "files": {
     "optimization/runtime/sdk.py": {
-      "bytes": 2697,
-      "sha256": "6d93ed2c6230dc1fbbb2a2259659abbe850ef1410788c56e997de65ca4724c21"
+      "bytes": 2922,
+      "sha256": "1aeac2e00d00257ab90ca144388acf8f13666b4ae33661ea1bb88d324a4d7236"
     },
     "optimization/runtime/job_view.py": {
       "bytes": 3054,
@@ -102,6 +115,14 @@
     "docs/step7_INTEGRATION_CROSSWALK.md": {
       "bytes": 9423,
       "sha256": "ac9c9bdd4af966c2c41cf874e9ea08d83544a9a93b2673b7153a3bf3be8eb9dd"
+    },
+    "optimization/runtime/forecast.py": {
+      "bytes": 8785,
+      "sha256": "43200a2f396251e4eb9eab11cc2a020ed5e4aec25bb27780bf9e52cfdcfb6156"
+    },
+    "optimization/runtime/handoff.py": {
+      "bytes": 4347,
+      "sha256": "6bc8fcf59946627dd3cd3584b61f6e8238fe513cbfc962a754c5792e26d996fe"
     }
   }
 }

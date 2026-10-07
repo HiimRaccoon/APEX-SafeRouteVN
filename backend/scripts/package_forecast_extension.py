@@ -5,6 +5,7 @@ import json
 from pathlib import Path, PurePosixPath
 import re
 import zipfile
+from backend.scripts.seal_forecast_runtime import CHANGES, verify_sealed_contract
 
 
 DATE = (2026, 10, 7, 0, 0, 0)
@@ -58,13 +59,18 @@ def package_extension(runtime_root, source_root, output, expected_build):
         if pin(payload) != expected:
             raise ValueError("Sealed runtime file changed: " + name)
     extension = json.loads((runtime_root / "extension_manifest.json").read_bytes())
-    if (extension.get("schema_version") != "saferoute-m3-forecast-extension-release/1"
+    if (extension.get("schema_version") != "saferoute-m3-forecast-extension-release/2"
             or extension.get("status") != "SEALED_DEVELOPMENT_EXTENSION"
             or extension.get("build_sha256") != expected_build or extension.get("app_version") != "0.9.0"
             or extension.get("production_files") != len(inventory["files"])
-            or set(extension.get("changed_production_files", [])) != {
-                "optimization/runtime/sdk.py", "optimization/runtime/forecast.py"}):
+            or set(extension.get("changed_production_files", [])) != CHANGES
+            or extension.get('handoff_contract_lock_schema_version') != 'task02-m2-runtime-handoff-contract-lock/2'
+            or extension.get('forecast_view_version') != 'task02-m2-job-forecast/1'):
         raise ValueError("Extension seal metadata differs")
+    lock_digest = extension.get('handoff_contract_lock_sha256')
+    contract = verify_sealed_contract(runtime_root, expected_build, lock_digest)
+    if contract != {'schema_version':'task02-m2-runtime-handoff-contract-lock/2','forecast_view_version':'task02-m2-job-forecast/1'}:
+        raise ValueError('CONTRACT_CHANGED: forecast handoff metadata differs')
     for name in ("production_inventory.json", "extension_manifest.json"):
         add(runtime_root, name, "runtime/" + name)
     for path in sorted((source_root / "backend").rglob("*")):
@@ -76,10 +82,14 @@ def package_extension(runtime_root, source_root, output, expected_build):
             add(source_root, name, name)
     doc = "docs/M3_FORECAST_EXTENSION_RELEASE_20261007.md"
     add(source_root, doc, doc)
-    manifest = {"schema_version": "saferoute-m3-forecast-supplement/1", "app_version": "0.9.0",
+    manifest = {"schema_version": "saferoute-m3-forecast-supplement/2", "app_version": "0.9.0", 'release_revision':2,
                 "release_date": "2026-10-07", "artifact_kind": "CODE_ONLY_SUPPLEMENT", "standalone": False,
                 "baseline_build_sha256": extension["baseline_build_sha256"], "runtime_build_sha256": expected_build,
                 "runtime_production_files": len(inventory["files"]),
+                'handoff_contract_lock_sha256': lock_digest,
+                'handoff_contract_lock_schema_version': contract['schema_version'],
+                'forecast_view_version': contract['forecast_view_version'],
+                'public_contract_verification':'SHIPPED_VERIFY_LOCK_PASS',
                 "prerequisites": ["Original verified M1 handoff and frozen snapshots", "Original verified M2 Step 7 runtime handoff",
                                   "Pinned Windows CPython 3.12 x64 runtime and backend dependencies",
                                   "Fresh private extension-bound authority, configuration and genuine preflight"],

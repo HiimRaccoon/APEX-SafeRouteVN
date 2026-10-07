@@ -39,3 +39,9 @@ The frontend loads forecasts through its existing comparison lane, validates com
 Native receipt files under `frontend/docs/evidence/member3-integration/` distinguish read-only forecast proof (`phase3-forecast-http-native.json`) from the separate explicit Accept/replay scope test (`phase3-forecast-scopes-http-native.json`) and browser/map gate (`phase3-forecast-browser-native.json`). Browser instrumentation only observes actual L.polyline arguments and calls the original renderer. Existing historical receipts are not rewritten.
 
 Public rain polygons and authoritative accepted action completion mapping remain unavailable. Preserve those labels; no offline geometry or invented completed prefix is used. This extension does not change mock/offline packs or default mode, and does not certify full Phase 7 E2E or production deployment.
+
+## Publication repair ? release revision 2
+
+The r1 publication was rejected because its baseline public handoff lock did not match the shipped SDK. Functional browser receipts remain historical evidence for build c333372; they are not r2 acceptance. The replacement uses SDK task02-m2-runtime-sdk/2 and a generated handoff lock /2 covering job_forecast, forecast schema/units and verifier bytes. It includes the unchanged frozen crosswalk in the production closure. Both sealing and packaging invoke the shipped verify_lock() after inventory verification. Frozen external API v1 is unchanged; baseline-to-v2 compatibility requires explicit migration.
+
+Current release and byte pins: [release guide](M3_FORECAST_EXTENSION_RELEASE_20261007.md). Fresh native G0/HTTP and release-verification receipts for r2 are separate from the earlier browser run. Reviewer sign-off on Phase 3 remains pending; the earlier DONE statement describes functional gates and is superseded for publication by this repair.

@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 import shutil
 import zipfile
+from optimization.runtime.handoff import PUBLIC_FILES, record as contract_record
+from backend.scripts.seal_forecast_runtime import CHANGES
 
 import pytest
 
@@ -28,15 +30,26 @@ def inputs(tmp_path):
         path = runtime / "optimization/runtime" / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"# sealed production\n")
+    for name in PUBLIC_FILES:
+        path = runtime / name
+        path.parent.mkdir(parents=True,exist_ok=True)
+        if not path.exists(): path.write_bytes(b'# public contract fixture\n')
+    for name in ('protocol.py','handoff.py'):
+        shutil.copyfile(Path(__file__).resolve().parents[2]/'optimization/runtime'/name, runtime/'optimization/runtime'/name)
+    lock_bytes = (json.dumps(contract_record(runtime),indent=2)+'\n').encode('utf8')
+    (runtime/'optimization/runtime/HANDOFF_CONTRACT_LOCK.json').write_bytes(lock_bytes)
+    lock_digest = hashlib.sha256(lock_bytes).hexdigest()
     files = {path.relative_to(runtime).as_posix(): {"bytes": path.stat().st_size,
              "sha256": hashlib.sha256(path.read_bytes()).hexdigest()} for path in runtime.rglob("*") if path.is_file()}
     record = {"files": files}
     build = hashlib.sha256(json.dumps(record, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
     (runtime / "production_inventory.json").write_text(json.dumps({**record, "build_sha256": build}))
-    (runtime / "extension_manifest.json").write_text(json.dumps({"schema_version": "saferoute-m3-forecast-extension-release/1",
+    (runtime / "extension_manifest.json").write_text(json.dumps({"schema_version": "saferoute-m3-forecast-extension-release/2",
         "status": "SEALED_DEVELOPMENT_EXTENSION", "baseline_build_sha256": "8" * 64,
         "build_sha256": build, "production_files": len(files), "app_version": "0.9.0",
-        "changed_production_files": ["optimization/runtime/forecast.py", "optimization/runtime/sdk.py"]}))
+        "changed_production_files": sorted(CHANGES), 'handoff_contract_lock_sha256':lock_digest,
+        'handoff_contract_lock_schema_version':'task02-m2-runtime-handoff-contract-lock/2',
+        'forecast_view_version':'task02-m2-job-forecast/1'}))
     for name, content in {"backend/api/main.py": "# source\n", "backend/requirements-backend.lock.txt": "example==1.0\n",
                           "backend/scripts/start_backend.py": "# launcher\n", "backend/scripts/Run-M3Preflight.ps1": "# script\n",
                           "backend/mock/fixtures/manifest.json": "{}", "backend/tests/test_private.py": "# exclude\n",
@@ -57,8 +70,8 @@ def test_supplement_is_complete_sealed_code_without_private_state(inputs, tmp_pa
     result = packager()(runtime, source, output, build)
     with zipfile.ZipFile(output) as archive:
         names = set(archive.namelist())
-        assert names == {"runtime/runtime_entry.py", "runtime/requirements-runtime.lock.txt",
-                         "runtime/optimization/runtime/sdk.py", "runtime/optimization/runtime/forecast.py",
+        sealed = json.loads((runtime/'production_inventory.json').read_bytes())
+        assert names == {'runtime/'+name for name in sealed['files']} | {
                          "runtime/production_inventory.json", "runtime/extension_manifest.json",
                          "backend/api/main.py", "backend/requirements-backend.lock.txt",
                          "backend/scripts/start_backend.py", "backend/scripts/Run-M3Preflight.ps1",
@@ -109,3 +122,23 @@ def test_supplement_refuses_overwriting_release(inputs, tmp_path):
     with pytest.raises(FileExistsError):
         packager()(runtime, source, output, build)
     assert output.read_bytes() == b"immutable release"
+
+
+def test_package_rejects_self_consistent_inventory_with_stale_public_lock(inputs,tmp_path):
+    runtime, source, _ = inputs
+    # Inventory alone can be rehashed after changing SDK; public lock must independently reject it.
+    (runtime/'optimization/runtime/sdk.py').write_text('# new SDK without regenerating public lock\n')
+    inv=json.loads((runtime/'production_inventory.json').read_bytes())
+    sdk=(runtime/'optimization/runtime/sdk.py').read_bytes()
+    inv['files']['optimization/runtime/sdk.py']={'bytes':len(sdk),'sha256':hashlib.sha256(sdk).hexdigest()}
+    body={k:v for k,v in inv.items() if k!='build_sha256'}
+    build=hashlib.sha256(json.dumps(body,sort_keys=True,ensure_ascii=False,separators=(',',':')).encode()).hexdigest()
+    inv['build_sha256']=build
+    (runtime/'production_inventory.json').write_text(json.dumps(inv))
+    seal=json.loads((runtime/'extension_manifest.json').read_bytes())
+    seal['build_sha256']=build
+    (runtime/'extension_manifest.json').write_text(json.dumps(seal))
+    output=tmp_path/'stale-lock.zip'
+    with pytest.raises(ValueError,match='CONTRACT_CHANGED'):
+        packager()(runtime,source,output,build)
+    assert not output.exists()
