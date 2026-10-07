@@ -6,7 +6,7 @@ describe("map scene from supplied geometry", () => {
   it("carries supplied source metadata from a proposal into the immutable accepted map", () => {
     const snapshot = new MockStateEngine().optimize();
     const proposal = snapshot.planState.proposedAlternatives[0];
-    const segment = proposal.content.vehiclePlans[0].routeSegments[0];
+    const segment = proposal.content!.vehiclePlans[0].routeSegments[0];
     segment.geometrySource = "MEMBER2_SUPPLIED";
     segment.geometry.coordinates = [[106.7, 10.8], [106.701, 10.801], [106.704, 10.803], [106.71, 10.81]];
     const engine = new MockStateEngine(snapshot);
@@ -25,7 +25,7 @@ describe("map scene from supplied geometry", () => {
     const accepted = engine.acceptSelectedPlan();
     const scene = createMapScene(accepted, proposal);
     expect(scene.accepted[0].coordinates).toEqual(accepted.planState.acceptedPlans[0].plan.vehiclePlans[0].routeSegments[0].geometry.coordinates);
-    expect(scene.proposed[0].coordinates).toEqual(proposal.content.vehiclePlans[0].routeSegments[0].geometry.coordinates);
+    expect(scene.proposed[0].coordinates).toEqual(proposal.content!.vehiclePlans[0].routeSegments[0].geometry.coordinates);
   });
 
   it("shows only the selected driver's accepted route and dims completed segments", () => {

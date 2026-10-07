@@ -94,7 +94,7 @@ describe("Admin map display preferences and operational legs", () => {
     const result = createAdminMapPresentation(engine.getSnapshot(), proposal, ["V2"]);
     expect(result.source).toBe("PROPOSED");
     expect(result.scene.accepted).toEqual([]);
-    expect(result.scene.proposed.map((s) => s.coordinates)).toEqual(proposal.content.vehiclePlans.find((v) => v.vehicleId === "V2")!.routeSegments.filter((s) => !s.toStopId.endsWith("return-depot")).map((s) => s.geometry.coordinates));
+    expect(result.scene.proposed.map((s) => s.coordinates)).toEqual(proposal.content!.vehiclePlans.find((v) => v.vehicleId === "V2")!.routeSegments.filter((s) => !s.toStopId.endsWith("return-depot")).map((s) => s.geometry.coordinates));
   });
 
   it.each(["session", "version", "selection"])("rejects a proposal with invalid %s binding", (field) => {

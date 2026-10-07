@@ -15,15 +15,15 @@ describe("locally computed manual event forecasts", () => {
     expect(proposed.planState.activeAcceptedPlanId).toBe(accepted.planState.activeAcceptedPlanId);
     expect(proposed.planState.acceptedPlans).toEqual(accepted.planState.acceptedPlans);
     for (const proposal of proposed.planState.proposedAlternatives) {
-      expect(proposal.content.provenance).toMatchObject({ source: "Member 2 offline runtime", integrationMode: "LOCAL_MANUAL_ANCHOR" });
-      expect(proposal.content.unserved).toEqual([]);
-      const deliveries = proposal.content.vehiclePlans.flatMap((v) => v.orderedStops.filter((s) => s.kind === "DELIVERY").flatMap((s) => s.orderIds));
+      expect(proposal.content!.provenance).toMatchObject({ source: "Member 2 offline runtime", integrationMode: "LOCAL_MANUAL_ANCHOR" });
+      expect(proposal.content!.unserved).toEqual([]);
+      const deliveries = proposal.content!.vehiclePlans.flatMap((v) => v.orderedStops.filter((s) => s.kind === "DELIVERY").flatMap((s) => s.orderIds));
       expect(deliveries.sort()).toEqual(["O001", "O002", "O003", "O009"]);
-      const roads = proposal.content.vehiclePlans.flatMap((v) => v.routeSegments);
+      const roads = proposal.content!.vehiclePlans.flatMap((v) => v.routeSegments);
       expect(roads.length).toBeGreaterThan(20);
       expect(roads.every((s) => s.geometrySource === "MEMBER2_SUPPLIED")).toBe(true);
       expect(roads.some((s) => s.geometry.coordinates.length > 2)).toBe(true);
-      expect(proposal.content.vehiclePlans.every((v) => v.suppliedActions!.filter((a) => a.kind === "PICKUP" || a.kind === "SERVICE").every((a) => (a.load_after_kg ?? 0) <= 15))).toBe(true);
+      expect(proposal.content!.vehiclePlans.every((v) => v.suppliedActions!.filter((a) => a.kind === "PICKUP" || a.kind === "SERVICE").every((a) => (a.load_after_kg ?? 0) <= 15))).toBe(true);
     }
     const again = engine.optimize();
     expect(again.planState.proposedAlternatives).toEqual(proposed.planState.proposedAlternatives);
@@ -40,10 +40,10 @@ describe("locally computed manual event forecasts", () => {
     engine.triggerFixtureEvent("S3-E1");
     const before = engine.getSnapshot().decisionState;
     for (const proposal of engine.optimize().planState.proposedAlternatives) {
-      expect(proposal.content.provenance.integrationMode).toBe("LOCAL_MANUAL_ANCHOR");
-      expect(proposal.content.vehiclePlans.find((v) => v.vehicleId === "V1")!.routeSegments).toEqual([]);
-      expect(proposal.content.vehiclePlans.find((v) => v.vehicleId === "V2")!.orderedStops.flatMap((s) => s.orderIds)).not.toContain("O001");
-      expect(proposal.content.unserved).toContainEqual({ orderId: "O001", reason: "CUSTODY_BLOCKED" });
+      expect(proposal.content!.provenance.integrationMode).toBe("LOCAL_MANUAL_ANCHOR");
+      expect(proposal.content!.vehiclePlans.find((v) => v.vehicleId === "V1")!.routeSegments).toEqual([]);
+      expect(proposal.content!.vehiclePlans.find((v) => v.vehicleId === "V2")!.orderedStops.flatMap((s) => s.orderIds)).not.toContain("O001");
+      expect(proposal.content!.unserved).toContainEqual({ orderId: "O001", reason: "CUSTODY_BLOCKED" });
     }
     expect(engine.getSnapshot().decisionState).toEqual(before);
   });
@@ -55,7 +55,7 @@ describe("locally computed manual event forecasts", () => {
     engine.acceptSelectedPlan();
     engine.pickupOrder({ vehicleId: "V1", orderId: "O002" });
     engine.triggerFixtureEvent("S2-E1");
-    expect(engine.optimize().planState.proposedAlternatives.every((p) => p.content.provenance.source !== "Member 2 offline runtime")).toBe(true);
+    expect(engine.optimize().planState.proposedAlternatives.every((p) => p.content!.provenance.source !== "Member 2 offline runtime")).toBe(true);
   });
 
   it.each(["S2", "S4"] as const)("uses a separately bound %s event forecast and invalidates it on expiry", (scenario) => {
@@ -65,10 +65,10 @@ describe("locally computed manual event forecasts", () => {
     const before = engine.getSnapshot().decisionState;
     const next = engine.optimize();
     expect(next.decisionState).toEqual(before);
-    expect(next.planState.proposedAlternatives.every((p) => p.content.provenance.integrationMode === "LOCAL_MANUAL_ANCHOR")).toBe(true);
+    expect(next.planState.proposedAlternatives.every((p) => p.content!.provenance.integrationMode === "LOCAL_MANUAL_ANCHOR")).toBe(true);
     if (scenario === "S4") {
       engine.advanceDemoClock(60);
-      expect(engine.optimize().planState.proposedAlternatives.every((p) => p.content.provenance.source !== "Member 2 offline runtime")).toBe(true);
+      expect(engine.optimize().planState.proposedAlternatives.every((p) => p.content!.provenance.source !== "Member 2 offline runtime")).toBe(true);
     }
   });
 
@@ -77,6 +77,6 @@ describe("locally computed manual event forecasts", () => {
     engine.triggerFixtureEvent("S4-E1");
     const proposed = engine.optimize();
     expect(proposed.decisionState.orders).toHaveLength(3);
-    expect(proposed.planState.proposedAlternatives.every((p) => p.content.provenance.source !== "Member 2 offline runtime")).toBe(true);
+    expect(proposed.planState.proposedAlternatives.every((p) => p.content!.provenance.source !== "Member 2 offline runtime")).toBe(true);
   });
 });

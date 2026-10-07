@@ -10,9 +10,14 @@ import type { M3ComparisonView, M3ExecutionView } from "../integrations/member3/
 import { acceptedView } from "../integrations/member3/acceptedTestFixture";
 import { adaptAcceptedExecution } from "../integrations/member3/executionViewAdapter";
 import { LABELS as L } from "./admin.labels";
+import { forecastView } from "../integrations/member3/forecastTestFixture";
+import { adaptJobForecast, parseJobForecast } from "../integrations/member3/forecastViewAdapter";
+import userEvent from "@testing-library/user-event";
 
 class BackendView extends MockDispatchApi {
-  constructor(private stale: boolean, private running: boolean, private metrics = false, private accepted = false) { super(); }
+  private previewSelection: string | null = null;
+  constructor(private stale: boolean, private running: boolean, private metrics = false, private accepted = false, private preview = false) { super(); }
+  override async selectAlternative(id: string) { this.previewSelection = id; return this.getSnapshot(); }
   override subscribe(_listener: (snapshot: DispatchSnapshot) => void) { return () => {}; }
   override async getSnapshot() {
     const s = await super.getSnapshot(); s.decisionState.sessionId = basis.session_id;
@@ -32,9 +37,28 @@ class BackendView extends MockDispatchApi {
       s.backend.executionView = view;
       Object.assign(s, adaptAcceptedExecution(view));
     }
+    if (this.preview) {
+      s.planState.proposedAlternatives = [adaptJobForecast(parseJobForecast(forecastView()), { basis, jobId: "job-return", profile: "SAFER", comparisonId: c.comparison_id, vehicleIds: ["V1"], deliveredPrefix: [] })!];
+      s.planState.selectedAlternativeId = this.previewSelection;
+    }
     return s;
   }
 }
+it("lets Admin select a certified public preview while Accept stays unsupported", async () => {
+  const user = userEvent.setup();
+  render(<MemoryRouter initialEntries={["/admin"]}><App api={new BackendView(false, false, false, false, true)} /></MemoryRouter>);
+  const select = await screen.findByRole("button", { name: "Select SAFER" });
+  expect(select).toBeEnabled(); await user.click(select);
+  expect(screen.getByRole("button", { name: "Select SAFER" })).toHaveTextContent("Selected");
+  expect(screen.getByRole("button", { name: "Accept selected plan" })).toBeDisabled();
+  expect(screen.getByText(/Preview.*job-return/)).toBeInTheDocument();
+  expect(screen.queryByText(/0 stops.*0.0 km/)).not.toBeInTheDocument();
+});
+it("does not expose unaccepted certified forecasts on Driver", async () => {
+  render(<MemoryRouter initialEntries={["/driver"]}><App api={new BackendView(false, false, false, false, true)} /></MemoryRouter>);
+  expect(await screen.findByText("No dispatch plan has been assigned yet.")).toBeInTheDocument();
+  expect(screen.queryByText(/Accepted route.*SAFER/)).not.toBeInTheDocument();
+});
 it("renders server lifecycle/verdict without fake metrics, routes or recommendation", async () => {
   render(<MemoryRouter initialEntries={["/admin"]}><App api={new BackendView(false, false)} /></MemoryRouter>);
   expect(await screen.findByText(/Comparison COMPLETED/)).toHaveTextContent("COMPARABLE");

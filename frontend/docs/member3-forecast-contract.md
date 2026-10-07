@@ -1,13 +1,11 @@
-# Public forecast contract gate — Phase 3
+# Public forecast contract — Phase 3
 
-Status: **pending M3 handoff**, checked against local M3 HTTP 0.8.0 on 2026-10-07.
+The missing pre-Accept projection in the received M3 **0.8.0** was confirmed locally. The user authorized implementing the supplemental SDK and HTTP read on 2026-10-07. The resulting development extension is **M3 0.9.0**, with a new sealed runtime build; the received releases and historical receipts remain unchanged.
 
-The current `docs/M3_OPENAPI_20261006.json`, `backend/api/routers/jobs.py`, `backend/api/routers/profiles.py` and runtime job view contract expose lifecycle, certification, coverage, basis and comparison metrics. They do not expose an owner-scoped public pre-Accept route geometry read. `GET /api/sessions/{session_id}/state` contains `accepted_trajectory` only after explicit acceptance. Historical backend receipts do not establish a frontend forecast gate.
+`GET /api/sessions/{session_id}/jobs/{job_id}/forecast` returns `task02-m2-job-forecast/1` inside the existing HTTP envelope. See the [exact contract and error matrix](../../docs/M3_FORECAST_API_HANDOFF_20261007.md), [generated OpenAPI](../../docs/M3_OPENAPI_20261007.json) and [release setup](../../docs/M3_FORECAST_EXTENSION_RELEASE_20261007.md).
 
-No forecast endpoint, forecast sample, implicit Accept, private store read, offline road geometry or fabricated stop-to-stop route has been added. Public rain polygons are also unavailable in the current world contract.
+The read is owner-scoped and binds certified geometry to the persisted job/session/profile/full nine-field input basis/build. No-witness jobs return null trajectory and metrics. PARTIAL and RETURN_ONLY retain native semantics. Directed source EDGE coordinates, order, microseconds and exact fractions are preserved. Historical reads retain their basis; frontend preview requires equality with the current world. Selecting a preview is a local UI preference, and never Accepts a job.
 
-M3 handoff must specify the public endpoint/schema, release/build, owner access, certified witness requirements, job/session/profile/full nine-field basis binding, no-witness/PARTIAL/RETURN_ONLY semantics, exact directed EDGE coordinates/fractions/action ordering, units and 401/403/404/error behavior. The native gate must compare the public response with the rendered input and prove head/generation/orders/custody/active job unchanged by the forecast read.
+Native read-only proof is in `evidence/member3-integration/phase3-forecast-http-native.json`; explicit Accept/replay scope proof is separate in `phase3-forecast-scopes-http-native.json`. The browser map/reload/Driver gate is recorded separately. No private store, offline road geometry or stop-to-stop approximation enters the frontend forecast path.
 
-Independent comparison KPI and accepted execution projection do not close this gate. See [Phase 3 progress](member3-phase3.md).
-
-Accepted execution completion also needs an authoritative public `decision_epoch` or completed action/progress projection. Action `start_us`/`end_us` are relative offsets; the current view supplies ISO observation timestamps but no mapping to those offsets. Native completion is explicitly unavailable until that handoff, while supplied accepted geometry remains visible.
+Public rain polygons remain unavailable. Accepted action completion also remains unavailable without an authoritative decision epoch or progress mapping: source `start_us`/`end_us` are relative offsets. Supplied accepted geometry is visible, but completed actions are not inferred from ISO observation timestamps. Operational frontend Accept/Event/Replay controls remain later-phase work.

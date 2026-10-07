@@ -7,9 +7,9 @@ describe("prepared decision packs", () => {
     const engine = new MockStateEngine();
     const alternatives = engine.optimize().planState.proposedAlternatives;
     expect(alternatives).toHaveLength(3);
-    expect(alternatives.every((p) => p.content.provenance.source === "Member 2 offline runtime")).toBe(true);
-    expect(alternatives.every((p) => p.content.vehiclePlans.flatMap((v) => v.routeSegments).every((s) => s.geometrySource === "MEMBER2_SUPPLIED"))).toBe(true);
-    expect(alternatives[0].content.vehiclePlans.flatMap((v) => v.routeSegments).length).toBeGreaterThan(20);
+    expect(alternatives.every((p) => p.content!.provenance.source === "Member 2 offline runtime")).toBe(true);
+    expect(alternatives.every((p) => p.content!.vehiclePlans.flatMap((v) => v.routeSegments).every((s) => s.geometrySource === "MEMBER2_SUPPLIED"))).toBe(true);
+    expect(alternatives[0].content!.vehiclePlans.flatMap((v) => v.routeSegments).length).toBeGreaterThan(20);
   });
 
   it.each(["S2", "S3", "S4"] as const)("uses the matching initial %s road pack without applying its event", (scenario) => {
@@ -18,7 +18,7 @@ describe("prepared decision packs", () => {
     const snapshot = engine.optimize();
     expect(snapshot.demo.availableEvents[0].status).toBe("READY_TO_TRIGGER");
     expect(snapshot.decisionState.orders).toHaveLength(8);
-    expect(snapshot.planState.proposedAlternatives.every((p) => p.content.provenance.source === "Member 2 offline runtime")).toBe(true);
+    expect(snapshot.planState.proposedAlternatives.every((p) => p.content!.provenance.source === "Member 2 offline runtime")).toBe(true);
   });
   it("creates three deterministic proposals without changing a stable world version", () => {
     const engine = new MockStateEngine();
@@ -28,7 +28,7 @@ describe("prepared decision packs", () => {
     const second = engine.optimize();
 
     expect(first.decisionState.version).toBe(before.decisionState.version);
-    expect(first.planState.proposedAlternatives.map((plan) => plan.content.profile)).toEqual(["FASTEST", "BALANCED", "SAFER"]);
+    expect(first.planState.proposedAlternatives.map((plan) => plan.content!.profile)).toEqual(["FASTEST", "BALANCED", "SAFER"]);
     expect(second.planState.proposedAlternatives).toEqual(first.planState.proposedAlternatives);
     expect(second.planState.selectedAlternativeId).toBeNull();
   });
@@ -58,15 +58,15 @@ describe("prepared decision packs", () => {
     const engine = new MockStateEngine();
     const [fastest, balanced, safer] = buildPreparedAlternatives(engine.getSnapshot().decisionState);
 
-    expect(fastest.content.vehiclePlans[0].routeSegments[0].geometry.type).toBe("LineString");
-    expect(new Set([fastest.content.metrics.durationMinutes, balanced.content.metrics.durationMinutes, safer.content.metrics.durationMinutes]).size).toBeGreaterThan(1);
-    expect(fastest.content.vehiclePlans).not.toEqual(safer.content.vehiclePlans);
+    expect(fastest.content!.vehiclePlans[0].routeSegments[0].geometry.type).toBe("LineString");
+    expect(new Set([fastest.content!.metrics.durationMinutes, balanced.content!.metrics.durationMinutes, safer.content!.metrics.durationMinutes]).size).toBeGreaterThan(1);
+    expect(fastest.content!.vehiclePlans).not.toEqual(safer.content!.vehiclePlans);
   });
 
   it("includes estimated fuel cost in each prepared proposal", () => {
     const proposals = buildPreparedAlternatives(new MockStateEngine().getSnapshot().decisionState);
 
-    expect(proposals.map((proposal) => proposal.content.metrics.fuelCostVnd)).toEqual([390000, 412000, 428000]);
+    expect(proposals.map((proposal) => proposal.content!.metrics.fuelCostVnd)).toEqual([390000, 412000, 428000]);
   });
 
   it("keeps S3 onboard work with V1 and reports waiting work whose prepared vehicle is unavailable", () => {
@@ -74,10 +74,10 @@ describe("prepared decision packs", () => {
     engine.loadScenario("S3");
     engine.triggerFixtureEvent("S3-E1");
 
-    const fastest = buildPreparedAlternatives(engine.getSnapshot().decisionState).find((proposal) => proposal.content.profile === "FASTEST");
+    const fastest = buildPreparedAlternatives(engine.getSnapshot().decisionState).find((proposal) => proposal.content!.profile === "FASTEST");
 
-    expect(fastest?.content.vehiclePlans.find((plan) => plan.vehicleId === "V1")?.orderedStops.some((stop) => stop.orderIds.includes("O001"))).toBe(true);
-    expect(fastest?.content.unserved.some((item) => item.reason === "Xe được phân công không khả dụng")).toBe(true);
+    expect(fastest?.content!.vehiclePlans.find((plan) => plan.vehicleId === "V1")?.orderedStops.some((stop) => stop.orderIds.includes("O001"))).toBe(true);
+    expect(fastest?.content!.unserved.some((item) => item.reason === "Xe được phân công không khả dụng")).toBe(true);
   });
 
   it("preserves S3 custody for every profile after V1 becomes unavailable", () => {
@@ -86,11 +86,11 @@ describe("prepared decision packs", () => {
     engine.triggerFixtureEvent("S3-E1");
     const proposals = buildPreparedAlternatives(engine.getSnapshot().decisionState);
     for (const proposal of proposals) {
-      const v1 = proposal.content.vehiclePlans.find((plan) => plan.vehicleId === "V1");
-      const v2 = proposal.content.vehiclePlans.find((plan) => plan.vehicleId === "V2");
+      const v1 = proposal.content!.vehiclePlans.find((plan) => plan.vehicleId === "V1");
+      const v2 = proposal.content!.vehiclePlans.find((plan) => plan.vehicleId === "V2");
       expect(v1?.orderedStops.some((stop) => stop.orderIds.includes("O001"))).toBe(true);
       expect(v2?.orderedStops.some((stop) => stop.orderIds.includes("O001"))).toBe(false);
-      expect(proposal.content.unserved.some((entry) => entry.orderId === "O001")).toBe(true);
+      expect(proposal.content!.unserved.some((entry) => entry.orderId === "O001")).toBe(true);
     }
   });
 
@@ -102,11 +102,11 @@ describe("prepared decision packs", () => {
     engine.pickupOrder({ vehicleId: "V1", orderId: "O002" });
     engine.triggerFixtureEvent("S3-E1");
     for (const proposal of engine.optimize().planState.proposedAlternatives) {
-      const v1Orders = proposal.content.vehiclePlans.find((plan) => plan.vehicleId === "V1")?.orderedStops.flatMap((stop) => stop.orderIds) ?? [];
-      const v2Orders = proposal.content.vehiclePlans.find((plan) => plan.vehicleId === "V2")?.orderedStops.flatMap((stop) => stop.orderIds) ?? [];
+      const v1Orders = proposal.content!.vehiclePlans.find((plan) => plan.vehicleId === "V1")?.orderedStops.flatMap((stop) => stop.orderIds) ?? [];
+      const v2Orders = proposal.content!.vehiclePlans.find((plan) => plan.vehicleId === "V2")?.orderedStops.flatMap((stop) => stop.orderIds) ?? [];
       expect(v1Orders).toContain("O002");
       expect(v2Orders).not.toContain("O002");
-      expect(proposal.content.unserved.some((item) => item.orderId === "O002")).toBe(true);
+      expect(proposal.content!.unserved.some((item) => item.orderId === "O002")).toBe(true);
     }
   });
 });

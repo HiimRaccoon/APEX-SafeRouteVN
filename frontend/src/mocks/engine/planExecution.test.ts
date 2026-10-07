@@ -3,7 +3,7 @@ import { MockStateEngine } from "./MockStateEngine";
 
 function acceptBalancedPlan(engine: MockStateEngine) {
   const optimized = engine.optimize();
-  const balanced = optimized.planState.proposedAlternatives.find((proposal) => proposal.content.profile === "BALANCED");
+  const balanced = optimized.planState.proposedAlternatives.find((proposal) => proposal.content!.profile === "BALANCED");
   if (!balanced) throw new Error("Missing BALANCED proposal in test setup.");
   engine.selectAlternative(balanced.id);
   return engine.acceptSelectedPlan();

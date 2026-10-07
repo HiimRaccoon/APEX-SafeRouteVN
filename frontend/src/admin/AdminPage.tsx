@@ -115,6 +115,7 @@ export function AdminPage() {
   const selected = snapshot.planState.proposedAlternatives.find(
     (plan) => plan.id === snapshot.planState.selectedAlternativeId
   );
+  const selectedPlan = selected?.content;
   const active = snapshot.planState.acceptedPlans.find(
     (plan) => plan.id === snapshot.planState.activeAcceptedPlanId
   );
@@ -157,23 +158,23 @@ export function AdminPage() {
 
   /* KPI deltas */
   const activeETA = active?.plan.metrics.durationMinutes;
-  const selectedETA = selected?.content.metrics.durationMinutes;
+  const selectedETA = selectedPlan?.metrics.durationMinutes;
   const etaDelta = activeETA != null && selectedETA != null ? selectedETA - activeETA : null;
 
   const activeOnTime = active?.plan.metrics.onTimeRate;
-  const selectedOnTime = selected?.content.metrics.onTimeRate;
+  const selectedOnTime = selectedPlan?.metrics.onTimeRate;
   const onTimeDelta = activeOnTime != null && selectedOnTime != null ? selectedOnTime - activeOnTime : null;
 
   const activeFuel = active?.plan.metrics.fuelCostVnd ?? null;
-  const selectedFuel = selected?.content.metrics.fuelCostVnd ?? null;
-  const mixedCostScopes = Boolean(active && selected && isOffline(active.plan) !== isOffline(selected.content));
+  const selectedFuel = selectedPlan?.metrics.fuelCostVnd ?? null;
+  const mixedCostScopes = Boolean(active && selectedPlan && isOffline(active.plan) !== isOffline(selectedPlan));
   const fuelDelta = !mixedCostScopes && activeFuel != null && selectedFuel != null ? selectedFuel - activeFuel : null;
 
   const activeRisk = active ? (active.plan.metrics.exposureScore / 100).toFixed(2) : null;
-  const selectedRisk = selected ? (selected.content.metrics.exposureScore / 100).toFixed(2) : null;
+  const selectedRisk = selectedPlan ? (selectedPlan.metrics.exposureScore / 100).toFixed(2) : null;
   const riskDelta =
-    active && selected && isOffline(active.plan) === isOffline(selected.content)
-      ? (selected.content.metrics.exposureScore - active.plan.metrics.exposureScore) / 100
+    active && selectedPlan && isOffline(active.plan) === isOffline(selectedPlan)
+      ? (selectedPlan.metrics.exposureScore - active.plan.metrics.exposureScore) / 100
       : null;
 
   return (
@@ -814,12 +815,12 @@ export function AdminPage() {
                     <td>{isOffline(active?.plan) || isOffline(selected?.content) ? "Fleet travel time" : L.metricTravelTime}</td>
                     <td>{active ? `${active.plan.metrics.durationMinutes} min` : L.notSelected}</td>
                     <td className="after-col">
-                      {selected ? `\u2192 ${selected.content.metrics.durationMinutes} min` : L.notSelected}
+                      {selectedPlan ? `\u2192 ${selectedPlan.metrics.durationMinutes} min` : L.notSelected}
                     </td>
                     <td>
-                      {selected && active ? (
+                      {selectedPlan && active ? (
                         <span className="diff-pill green">
-                          {(selected.content.metrics.durationMinutes - active.plan.metrics.durationMinutes).toFixed(1)} min
+                          {(selectedPlan.metrics.durationMinutes - active.plan.metrics.durationMinutes).toFixed(1)} min
                         </span>
                       ) : (
                         L.notSelected
@@ -830,14 +831,14 @@ export function AdminPage() {
                     <td>{L.metricDistance}</td>
                     <td>{active ? `${active.plan.metrics.distanceKm.toFixed(1)} km` : L.notSelected}</td>
                     <td className="after-col">
-                      {selected
-                        ? `\u2192 ${selected.content.metrics.distanceKm.toFixed(1)} km`
+                      {selectedPlan
+                        ? `\u2192 ${selectedPlan.metrics.distanceKm.toFixed(1)} km`
                         : L.notSelected}
                     </td>
                     <td>
-                      {selected && active ? (
+                      {selectedPlan && active ? (
                         <span className="diff-pill green">
-                          {(selected.content.metrics.distanceKm - active.plan.metrics.distanceKm).toFixed(1)} km
+                          {(selectedPlan.metrics.distanceKm - active.plan.metrics.distanceKm).toFixed(1)} km
                         </span>
                       ) : (
                         L.notSelected
@@ -851,7 +852,7 @@ export function AdminPage() {
                       {mixedCostScopes && (isOffline(active?.plan) ? " (route estimate)" : " (fuel estimate)")}
                     </td>
                     <td className="after-col">
-                      {selected ? `\u2192 ${selected.content.metrics.fuelCostVnd.toLocaleString("en-US", { maximumFractionDigits: 0 })} VND` : L.notSelected}
+                      {selectedPlan ? `\u2192 ${selectedPlan.metrics.fuelCostVnd.toLocaleString("en-US", { maximumFractionDigits: 0 })} VND` : L.notSelected}
                       {mixedCostScopes && (isOffline(selected?.content) ? " (route estimate)" : " (fuel estimate)")}
                     </td>
                     <td>
@@ -886,8 +887,8 @@ export function AdminPage() {
                     <td>{L.metricRiskExposure}</td>
                     <td>{active ? exposureText(active.plan) : L.notSelected}</td>
                     <td className="after-col">
-                      {selected
-                        ? `\u2192 ${exposureText(selected.content)}`
+                      {selectedPlan
+                        ? `\u2192 ${exposureText(selectedPlan)}`
                         : L.notSelected}
                     </td>
                     <td>
@@ -931,7 +932,7 @@ export function AdminPage() {
 
             {backend && <div className="di-hint-text" role="status">
               {comparison ? `Comparison ${comparison.status} · ${comparison.outcome?.comparison?.status ?? comparison.outcome?.reason ?? "Waiting for server verdict"} · ${sameBasis(comparison.input_basis, backend.basis) ? "CURRENT" : "STALE"}` : "Optimize runs three forecasts through Member 3."}
-              <p>Forecast preview is unavailable until the public geometry contract is connected.</p>
+              <p>Select a certified current forecast to preview its supplied geometry. Accept is not connected.</p>
               <button type="button" className="text-button" disabled={pending} onClick={() => void invoke(() => api.getSnapshot())}>Refresh backend</button>
               {comparisonRunning && api.cancelComparison && <button type="button" className="text-button" disabled={pending || backend.stale} onClick={() => void invoke(() => api.cancelComparison!())}>Cancel comparison</button>}
               {comparison && <p title={comparison.comparison_id}>M3 · {comparison.comparison_id} · head {comparison.input_basis.head_version} / generation {comparison.input_basis.generation}{comparisonCanRank(comparison) ? " · Comparable forecasts" : " · No comparative ranking"}</p>}
@@ -948,20 +949,20 @@ export function AdminPage() {
             <div className="alt-cards-grid">
               {profiles.map((profile) => {
                 const proposal = snapshot.planState.proposedAlternatives.find(
-                  (item) => item.content.profile === profile
+                  (item) => (item.origin?.kind === "MEMBER3" ? item.origin.profile : item.content?.profile) === profile
                 );
                 const isSelected = Boolean(proposal && selected && proposal.id === selected.id);
                 const isBalanced = profile === "BALANCED";
                 const hasData = Boolean(proposal);
-                const onTimeVal = hasData ? proposal!.content.metrics.onTimeRate : null;
+                const onTimeVal = proposal?.content?.metrics.onTimeRate ?? null;
                 const child = comparison?.jobs.find(row => row.profile === profile);
-                const nativeMetrics = backend ? comparisonMetrics(comparison, profile, backend.basis) : null;
+                const nativeMetrics = backend && !backend.stale ? proposal?.nativeForecast?.metrics ?? comparisonMetrics(comparison, profile, backend.basis) : null;
 
                 return (
                   <article
                     key={profile}
                     className={`alt-card${isSelected ? " alt-card-selected selected" : ""}`}
-                    onClick={() => !backend && proposal && proposalCurrency(proposal, snapshot) === "CURRENT" && void invoke(() => api.selectAlternative(proposal.id))}
+                    onClick={() => !pending && !backend?.stale && proposal && proposalCurrency(proposal, snapshot) === "CURRENT" && void invoke(() => api.selectAlternative(proposal.id))}
                     style={{ cursor: proposal ? "pointer" : "default" }}
                   >
                     {/* Recommended badge (Stitch: blue, absolute above border) */}
@@ -1002,12 +1003,12 @@ export function AdminPage() {
                     </> : <div className="alt-metrics-grid">
                       <div className="alt-metric-item">
                         {isOffline(proposal?.content) ? "Fleet travel:" : "ETA:"} <strong className="alt-metric-val">
-                          {hasData ? `${proposal!.content.metrics.durationMinutes} min` : "—"}
+                          {hasData ? `${proposal!.content!.metrics.durationMinutes} min` : "—"}
                         </strong>
                       </div>
                       <div className="alt-metric-item">
                         {isOffline(proposal?.content) ? "Route cost:" : "Fuel cost:"} <strong className="alt-metric-val">
-                          {proposal ? `${Math.round(proposal.content.metrics.fuelCostVnd / 1000)}K VND` : "—"}
+                          {proposal ? `${Math.round(proposal.content!.metrics.fuelCostVnd / 1000)}K VND` : "—"}
                         </strong>
                       </div>
                       <div className="alt-metric-item">
@@ -1018,7 +1019,7 @@ export function AdminPage() {
                       </div>
                       <div className="alt-metric-item">
                         Exposure proxy: <strong className="alt-metric-val">
-                          {proposal ? exposureText(proposal.content) : "—"}
+                          {proposal ? exposureText(proposal.content!) : "—"}
                         </strong>
                       </div>
                     </div>}
@@ -1028,7 +1029,7 @@ export function AdminPage() {
                       type="button"
                       aria-label={`Select ${profile}`}
                       className={`alt-view-btn ${isSelected ? "alt-view-selected" : "alt-view-outline"}`}
-                      disabled={!proposal || phaseControlsDisabled || proposalCurrency(proposal, snapshot) === "STALE"}
+                      disabled={!proposal || pending || Boolean(backend?.stale) || proposalCurrency(proposal, snapshot) === "STALE"}
                       onClick={(e) => {
                         e.stopPropagation();
                         if (proposal) void invoke(() => api.selectAlternative(proposal.id));
@@ -1047,11 +1048,13 @@ export function AdminPage() {
               <div className="plan-summary-header">
                 <span className="plan-summary-label">SELECTED PLAN SUMMARY</span>
                 {selected && (
-                  <span className="plan-summary-plan-name">{selected.content.profile}</span>
+                  <span className="plan-summary-plan-name">{selected.origin?.kind === "MEMBER3" ? selected.origin.profile : selectedPlan?.profile}</span>
                 )}
               </div>
-              {snapshot.decisionState.vehicles.map((v) => {
-                const vPlan = selected?.content.vehiclePlans.find((vp) => vp.vehicleId === v.id);
+              {selected?.nativeForecast && <p className="di-hint-text">Preview {selected.id} · FORECAST_ONLY · MEMBER3_HTTP · {selected.origin?.kind === "MEMBER3" ? selected.origin.profile : ""}</p>}
+              {selected?.nativeForecast?.jobView.unserved_orders.map(item => <p key={item.order_id} className="di-hint-text">{item.order_id}: {item.reason}</p>)}
+              {!backend && snapshot.decisionState.vehicles.map((v) => {
+                const vPlan = selectedPlan?.vehiclePlans.find((vp) => vp.vehicleId === v.id);
                 const stops = vPlan
                   ? vPlan.orderedStops.filter((s) => s.kind !== "DEPOT_PICKUP").length
                   : 0;
@@ -1128,7 +1131,7 @@ export function AdminPage() {
                   /* Use accepted plan first, then selected proposal, then no plan */
                   const displayVehiclePlans =
                     active?.plan.vehiclePlans ??
-                    selected?.content.vehiclePlans ??
+                    selectedPlan?.vehiclePlans ??
                     [];
                   const myVPlan = displayVehiclePlans.find((vp) => vp.vehicleId === vehicle.id);
                   const myStops = myVPlan
@@ -1224,7 +1227,7 @@ export function AdminPage() {
               const total = snapshot.decisionState.vehicles.length;
               const displayVehiclePlans =
                 active?.plan.vehiclePlans ??
-                selected?.content.vehiclePlans ??
+                selectedPlan?.vehiclePlans ??
                 [];
               const enRouteCount = snapshot.decisionState.vehicles.filter(
                 (v) =>

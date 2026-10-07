@@ -4,6 +4,7 @@ import { Member3Client } from "../../integrations/member3/client";
 import { createMapScene } from "../../shared/components/mapScene";
 import type { M3Vehicle, M3Projection, M3OrdersView } from "../../integrations/member3/types";
 import { comparison } from "../../integrations/member3/testFixtures";
+import { forecastView } from "../../integrations/member3/forecastTestFixture";
 
 // Contract-shaped HTTP data, deliberately unrelated to frontend fixture IDs/coordinates.
 function server() {
@@ -48,6 +49,62 @@ function server() {
 }
 
 describe("BackendDispatchApi foundation", () => {
+  it("reloads certified forecasts and selects a preview locally with zero Accept POSTs", async () => {
+    const s = server(); const c = comparison();
+    c.session_id = s.state.basis.session_id; c.input_basis = s.state.basis;
+    c.jobs.forEach(row => { row.view.input_basis = s.state.basis; row.view.served_orders = ["M3-O1"]; });
+    c.outcome.comparison.jobs.forEach(row => { row.basis = s.state.basis; });
+    const reads: string[] = [], mutations: string[] = []; let failForecast = false;
+    const fetcher: typeof fetch = async (url, options) => {
+      const path = new URL(String(url)).pathname;
+      if (options?.method === "POST") mutations.push(path);
+      let data: unknown;
+      if (path.includes("/profiles/comparisons/")) data = c;
+      else if (path.endsWith("/forecast")) {
+        if (failForecast) return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", status: "ERROR", request_id: "trace", data: null, diagnostics: [{ code: "FORECAST_UNAVAILABLE", path: "forecast", message: "Read unavailable" }] }), { status: 503 });
+        reads.push(path); const jid = path.split("/").at(-2)!; const row = c.jobs.find(r => r.job_id === jid)!;
+        const f = forecastView(); f.session_id = c.session_id; f.job_id = jid; f.profile = row.profile;
+        f.input_basis = s.state.basis; f.job_view = { ...Object.fromEntries(Object.entries(row.view).reverse()), ...row.view };
+        f.trajectory.job_id = jid; f.trajectory.profile = row.profile;
+        const route = (f.trajectory.vehicle_routes as Array<{ vehicle_id: string; order_sequence: string[]; actions: Record<string, unknown>[] }>)[0];
+        route.vehicle_id = "M3-V1"; route.order_sequence = ["M3-O1"];
+        route.actions.push({ kind: "SERVICE", start_us: "2000000", end_us: "2000000", order_id: "M3-O1", node_id: 2, load_after_kg: 0 });
+        data = f;
+      } else return s.fetcher(url, options);
+      return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", status: "OK", request_id: "trace", data, diagnostics: [] }));
+    };
+    await new BackendDispatchApi({ client: s.client, storage: s.storage }).loadScenario("S1");
+    const key = [...s.values.keys()].find(k => k.includes("session.v1"))!;
+    const pointer = JSON.parse(s.values.get(key)!); pointer.comparison = { id: c.comparison_id, inputBasis: c.input_basis }; s.values.set(key, JSON.stringify(pointer));
+    const client = new Member3Client({ fetch: fetcher, token: () => "test-bearer" });
+    const api = new BackendDispatchApi({ client, storage: s.storage });
+    const before = await api.getSnapshot();
+    expect(before.planState.proposedAlternatives).toHaveLength(3); expect(reads).toHaveLength(3);
+    expect(before.backend!.capabilities!.forecastGeometry).toBe(true);
+    const selected = await api.selectAlternative("job-SAFER");
+    expect(selected.planState.selectedAlternativeId).toBe("job-SAFER");
+    expect(createMapScene(selected, selected.planState.proposedAlternatives[2]).proposed).toHaveLength(1);
+    expect(selected.planState.acceptedExecution).toBeNull(); expect(selected.executionState.activePlanId).toBeNull();
+    expect(createMapScene(selected, selected.planState.proposedAlternatives[2], "M3-V1").proposed).toEqual([]);
+    expect(selected.decisionState).toEqual(before.decisionState);
+    await expect(api.acceptSelectedPlan()).rejects.toMatchObject({ code: "PHASE_NOT_SUPPORTED" });
+    const restored = await new BackendDispatchApi({ client, storage: s.storage }).getSnapshot();
+    expect(restored.planState.selectedAlternativeId).toBe("job-SAFER"); expect(mutations).toEqual([]);
+    expect(JSON.stringify([...s.values.values()])).not.toContain("coordinates");
+    c.jobs[2].view.served_orders = ["M3-O2"];
+    await expect(api.getSnapshot()).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+    c.jobs[2].view.served_orders = ["M3-O1"];
+    failForecast = true;
+    const failing = new BackendDispatchApi({ client, storage: s.storage }); const observed: import("../../shared/types/dispatch").DispatchSnapshot[] = [];
+    const stop = failing.subscribe(next => observed.push(next));
+    await expect(failing.getSnapshot()).rejects.toMatchObject({ code: "FORECAST_UNAVAILABLE" }); stop();
+    expect(observed.at(-1)!.backend!.stale).toBe(true); expect(observed.at(-1)!.planState.proposedAlternatives).toEqual([]);
+    expect(observed.at(-1)!.backend!.capabilities!.forecastGeometry).toBe(false);
+    expect(observed.at(-1)!.planState.selectedAlternativeId).toBeNull();
+    failForecast = false;
+    s.state.basis = { ...s.state.basis, source_sha256: "f".repeat(64) }; s.orders.basis = s.vehicles.basis = s.locations.basis = s.state.basis;
+    const stale = await api.getSnapshot(); expect(stale.planState.proposedAlternatives).toEqual([]); expect(stale.planState.selectedAlternativeId).toBeNull();
+  });
   it("gives a session mutation priority over coalesced periodic reads and fences the late reply", async () => {
     vi.useFakeTimers();
     try {
@@ -162,6 +219,15 @@ describe("BackendDispatchApi foundation", () => {
     const fetcher: typeof fetch = async (url, options) => {
       const path = new URL(String(url)).pathname;
       if (path.includes("/profiles/")) return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", request_id: "trace", status: "OK", data: path.endsWith("/compare") ? receipt : c, diagnostics: [] }));
+      if (path.endsWith("/forecast")) {
+        const jid = path.split("/").at(-2)!, row = c.jobs.find(r => r.job_id === jid)!;
+        const f = forecastView(); f.session_id = c.session_id; f.job_id = jid; f.profile = row.profile; f.input_basis = row.view.input_basis; f.job_view = row.view;
+        f.trajectory.job_id = jid; f.trajectory.profile = row.profile;
+        const route = (f.trajectory.vehicle_routes as Array<{ vehicle_id: string; order_sequence: string[]; actions: Record<string, unknown>[] }>)[0];
+        route.vehicle_id = "M3-V1"; route.order_sequence = ["O1"];
+        route.actions.push({ kind: "SERVICE", start_us: "2000000", end_us: "2000000", order_id: "O1", node_id: 2, load_after_kg: 0 });
+        return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", request_id: "trace", status: "OK", data: f, diagnostics: [] }));
+      }
       return s.fetcher(url, options);
     };
     const api = new BackendDispatchApi({ client: new Member3Client({ fetch: fetcher, token: () => "test-only-bearer" }), storage: s.storage });
@@ -275,7 +341,8 @@ describe("BackendDispatchApi foundation", () => {
   it("refuses Phase 2 actions without performing HTTP mutations", async () => {
     const s = server();
     const api = new BackendDispatchApi({ client: s.client, storage: s.storage });
-    for (const action of [() => api.selectAlternative("x"), () => api.acceptSelectedPlan(), () => api.triggerFixtureEvent("x"),
+    await expect(api.selectAlternative("x")).rejects.toMatchObject({ code: "PREVIEW_UNAVAILABLE" });
+    for (const action of [() => api.acceptSelectedPlan(), () => api.triggerFixtureEvent("x"),
       () => api.setUrgentOrderEnabled(true), () => api.pickupOrder({ vehicleId: "v", orderId: "o" }), () => api.deliverOrder({ vehicleId: "v", orderId: "o" }),
       () => api.advanceDemoClock(10), () => api.resetDemoSession()]) {
       await expect(action()).rejects.toMatchObject({ code: "PHASE_NOT_SUPPORTED" });

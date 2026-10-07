@@ -82,7 +82,15 @@ export interface ImmutablePlanContent {
 export interface ProposedAlternative {
   origin?: ProposalOrigin;
   id: string;
-  content: ImmutablePlanContent;
+  content?: ImmutablePlanContent;
+  /** Certified public forecast metadata; never substitutes a legacy mock plan or accepted world. */
+  nativeForecast?: {
+    source: "MEMBER3_HTTP";
+    trajectory: Record<string, unknown>;
+    segments: import("../components/mapScene").MapSegment[];
+    metrics: ReturnType<typeof import("../../integrations/member3/metricsAdapter").adaptMetrics>;
+    jobView: import("../../integrations/member3/types").M3JobView;
+  };
   generatedForSessionId: string;
   generatedForStateVersion: number;
 }

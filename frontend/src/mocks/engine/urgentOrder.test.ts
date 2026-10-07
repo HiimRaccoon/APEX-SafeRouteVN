@@ -54,16 +54,16 @@ describe("Urgent Order ON/OFF", () => {
 
   it("matches the original road pack after OFF and the urgent world pack after ON without changing supplied geometry", () => {
     const engine = new MockStateEngine();
-    const initial = engine.optimize().planState.proposedAlternatives.map((proposal) => proposal.content.vehiclePlans);
+    const initial = engine.optimize().planState.proposedAlternatives.map((proposal) => proposal.content!.vehiclePlans);
     engine.setUrgentOrderEnabled(true);
     const urgent = engine.optimize().planState.proposedAlternatives;
-    expect(urgent.every((proposal) => proposal.content.provenance.integrationMode === "LOCAL_MANUAL_ANCHOR")).toBe(true);
+    expect(urgent.every((proposal) => proposal.content!.provenance.integrationMode === "LOCAL_MANUAL_ANCHOR")).toBe(true);
     engine.setUrgentOrderEnabled(false);
     const restored = engine.optimize().planState.proposedAlternatives;
-    expect(restored.every((proposal) => proposal.content.provenance.source === "Member 2 offline runtime")).toBe(true);
-    expect(restored.map((proposal) => proposal.content.vehiclePlans)).toEqual(initial);
+    expect(restored.every((proposal) => proposal.content!.provenance.source === "Member 2 offline runtime")).toBe(true);
+    expect(restored.map((proposal) => proposal.content!.vehiclePlans)).toEqual(initial);
     engine.setUrgentOrderEnabled(true);
-    expect(engine.optimize().planState.proposedAlternatives.map((proposal) => proposal.content.vehiclePlans)).toEqual(urgent.map((proposal) => proposal.content.vehiclePlans));
+    expect(engine.optimize().planState.proposedAlternatives.map((proposal) => proposal.content!.vehiclePlans)).toEqual(urgent.map((proposal) => proposal.content!.vehiclePlans));
   });
 
   it.each(["ONBOARD", "DELIVERED"])("rejects cancellation of %s urgent cargo without changing the world", (status) => {

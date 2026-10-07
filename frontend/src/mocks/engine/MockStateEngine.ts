@@ -118,7 +118,7 @@ export class MockStateEngine {
     }
     const record = {
       id: `${this.snapshot.decisionState.sessionId}-accepted-${this.snapshot.planState.acceptedPlans.length + 1}`,
-      plan: clone(selected.content),
+      plan: clone(selected.content!),
       acceptedAt: this.snapshot.demoClock.now
     };
     this.snapshot.planState.acceptedPlans.push(record);

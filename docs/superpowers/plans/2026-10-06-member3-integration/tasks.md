@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | 1 — Foundation | Load/read S1 native đã PASS | Baseline tests khi bắt đầu Phase 2; không làm lại code Foundation. |
 | 2 — Optimize | PASS native S1, 196 tests; 2026-10-07 | String revision + real comparison + lifecycle/polling/error gate. |
-| 3 — Map + KPI | PARTIAL — KPI + accepted branch implemented; forecast contract BLOCKED | Native proposal geometry and non-null accepted/replay metric scopes still require acceptance evidence. |
+| 3 — Map + KPI | PASS native S1, extension 0.9.0; 234 frontend tests | Certified forecast + accepted geometry + non-null scopes, read-only map/reload/Driver gate PASS. |
 | 4 — Select + Accept | Chưa triển khai | Local Select + certified current-basis Accept + server state. |
 | 5 — Event + Re-optimization | Chưa triển khai | Native S2/S3/S4 barrier/apply/re-optimize đúng. |
 | 6 — Driver Execution / Replay | Chưa triển khai | Backend accepted Driver/replay controls + server session cross-tab. |
@@ -69,25 +69,25 @@ File paths là từ root repo. Lệnh npm và node bên dưới chạy trong `fr
 
 ## Phase 3 — Map + KPI từ kết quả backend
 
-Progress 2026-10-07: comparison/scoped KPI native gate PASS; accepted execution branch has TDD coverage. Full Phase 3 is pending P3-01 public forecast geometry handoff. See `frontend/docs/member3-phase3.md` and `phase3-ledger.md`; accepted fixture tests are not native Accept/replay acceptance.
+Progress 2026-10-07: user-authorized public forecast extension M3 0.9.0 implemented via TDD. Native HTTP certified geometry/read-only/auth gate PASS; separate explicit Accept/replay gives non-null scopes. [Browser/map/reload/Driver gate PASS](../../../../frontend/docs/evidence/member3-integration/phase3-forecast-browser-native.json): 1207 source EDGE, 1159 drawable EDGE after Admin filters, unchanged world, accepted-only Driver. Phase 3 DONE within its current public-contract scope; completed-action mapping and rain polygons remain unavailable. See `frontend/docs/member3-phase3.md` and the [extension ledger](../2026-10-07-public-forecast-ledger.md); historical fixture tests are separate from these native runs.
 
 ### P3-01 — Khóa public job forecast geometry contract với M3
 
-**Dependencies:** P2; **BLOCKED cho proposal geometry đến khi M3 bàn giao approved contract**. **Files:** new `frontend/docs/member3-forecast-contract.md`, sanitized public payloads `frontend/src/integrations/member3/fixtures/forecast-*.json` test-only; extend client/types sau gate. **Consumes:** actual M3 0.8.0 router/job/comparison payloads. **Produces:** approved read-only endpoint/schema/example/binding/error matrix để adaptJobForecast dùng.
+**Dependencies:** P2; original 0.8.0 gap resolved by user-authorized SDK + M3 0.9.0 extension. **Files:** `frontend/docs/member3-forecast-contract.md`, contract samples in adapter tests and sanitized native receipts; client/types. **Consumes:** [extension public forecast contract](../../../M3_FORECAST_API_HANDOFF_20261007.md). **Produces:** locked read-only endpoint/schema/binding/error matrix để adaptJobForecast dùng.
 
 - [x] Ghi bằng chứng khoảng trống hiện tại: GET job không geometry; comparison chỉ metrics/basis; GET state là accepted trajectory. Không gọi Accept ngầm hoặc invent API path trước thỏa thuận.
-- [ ] M3 cung cấp owner-scoped public forecast read từ certified M2 witness, bound job/session/profile/full basis/build; chỉ rõ no-witness/RETURN_ONLY/PARTIAL và units/EDGE fractions. Ghi endpoint/schema/chốt release nguồn vào contract note.
-- [ ] Test contract `forecast_read_does_not_mutate_world`: trước/sau read giữ generation/head/orders/custody/active_job_id; 401/403/404 và malformed/basis mismatch fail closed. Khóa public samples không token/private stores.
-- [ ] Nếu public rain context/polygon chưa có, ghi unavailable; chỉ thêm client/context adapter khi approved contract thật tồn tại. Gate DONE khi contract và native read chứng minh có geometry; không tick chỉ vì đã viết note.
+- [x] Owner-scoped public forecast read từ certified M2 witness, bound job/session/profile/full basis/build; no-witness/RETURN_ONLY/PARTIAL và units/EDGE fractions. Extension contract/release riêng, không tuyên bố đã có trong 0.8.0.
+- [x] Test contract `forecast_read_does_not_mutate_world`: native before/after execution view bằng nhau; 401/403/404 PASS, malformed/basis mismatch covered by SDK/HTTP/frontend tests. Public receipt `phase3-forecast-http-native.json` không token/private stores.
+- [x] Public rain polygons unavailable; không thêm offline geometry. Native HTTP receipt chứa directed EDGE thật và cùng full basis; contract note khóa source/build.
 
 ### P3-02 — Proposal/accepted execution adapters và exact EDGE map
 
 **Dependencies:** P2-03; proposal branch cần P3-01, accepted branch làm được độc lập. **Files:** new `forecastViewAdapter.ts/.test.ts`, `executionViewAdapter.ts/.test.ts`; modify shared types/mapScene/adminMapPresentation, reuse existing Member2 geometry helpers. **Consumes:** approved forecast, ProposalOrigin, M3ExecutionView. **Produces:** adaptJobForecast/adaptAcceptedExecution theo plan và frontend route/map models.
 
-- [ ] Test `preserves_all_edge_points_direction_and_fraction`: coordinates/source action IDs/order giữ nguyên; không nối stop/simplify; missing geometry hiện unavailable, binding mismatch reject; partial EDGE không vẽ full edge giả.
-- [ ] Test `keeps_proposal_and_accepted_sources_separate`: highlighting proposal không đổi accepted; state accepted_trajectory=null → no accepted route; initial vehicle thiếu timestamp/activity không invented observation.
-- [ ] Test completed prefix dimming/planned suffix/RETURN_ONLY continuation/PARTIAL unserved; giữ Admin visibility/return filters/V1–V2 palette, Driver accepted only; tile error giữ input geometry.
-- [ ] FAIL → implement adapters/renderer input; targeted/full checks PASS; native S1 forecast preview read-only + exact geometry equality public response; gate không dùng packs/schematic.
+- [x] Test `preserves_all_edge_points_direction_and_fraction`: coordinates/source action IDs/order giữ nguyên; không nối stop/simplify; missing geometry hiện unavailable, binding mismatch reject; partial EDGE không vẽ full edge giả.
+- [x] Test `keeps_proposal_and_accepted_sources_separate`: highlighting proposal không đổi accepted; state accepted_trajectory=null → no accepted route; initial vehicle thiếu timestamp/activity không invented observation.
+- [x] Test planned suffix/RETURN_ONLY continuation/PARTIAL unserved; Admin visibility/return filters/V1–V2 palette, Driver accepted only, tile error. Completed action mapping remains explicitly unavailable because public decision epoch/progress is absent; no invented dimmed prefix.
+- [x] FAIL → implement adapters/renderer input; targeted/full checks PASS; native S1 forecast preview read-only + exact geometry equality public response, actual Leaflet input equality, reload same comparison/local preference and accepted-only Driver PASS; gate không dùng packs/schematic.
 
 ### P3-03 — Scoped KPI và provenance
 
@@ -96,7 +96,7 @@ Progress 2026-10-07: comparison/scoped KPI native gate PASS; accepted execution 
 - [x] Test `does_not_conflate_observed_and_forecast`: observed=null stays unavailable; planned/projected values riêng; no sum/double count; served denominator only khi coverage_evaluated=true.
 - [x] Test `preserves_proxy_units_and_missing_values`: fuel/on-time missing → null/placeholder, exposure không mock `/100`/`x` khi không contract, metric strings/nonfinite invalid; source MEMBER3_HTTP khác offline.
 - [x] FAIL → implement unit-safe conversion/display (m→km/s→min khi declared); card shell giữ nguyên; targeted/full checks PASS.
-- [ ] Native metrics/provenance equal corresponding public job/comparison/execution scopes; ghi evidence. Phase 3 DONE chỉ khi cả geometry contract và map/KPI gate PASS.
+- [x] Native metrics/provenance equal corresponding public job/comparison/execution scopes; three non-null execution scopes match public payload and rendered values. Separate explicit scope HTTP receipt + forecast browser receipt. Geometry contract and map/KPI gates PASS; Phase 3 DONE.
 
 ## Phase 4 — Select + Accept thật
 
@@ -202,8 +202,9 @@ Progress 2026-10-07: comparison/scoped KPI native gate PASS; accepted execution 
 | --- | --- |
 | Foundation native S1 | Existing [browser receipt](../../../../frontend/docs/evidence/m3-phase1-browser-results.json), [HTTP](../../../../frontend/docs/evidence/m3-phase1-http-responses.json), [verification](../../../../frontend/docs/evidence/m3-phase1-verification.json). |
 | Phase 2 | [Native S1](../../../../frontend/docs/evidence/member3-integration/phase2-latest.json), [verification](../../../../frontend/docs/evidence/member3-integration/verification.json), [review fixes](../../../../frontend/docs/evidence/member3-integration/review.md). 196 tests/typecheck/build PASS; comparison COMPARABLE, physical world unchanged. |
-| Phase 3–6 | Chưa triển khai; giữ các gate của từng phase. |
-| Forecast public contract | Chưa bàn giao; P3-01 pending, không giả có geometry endpoint. |
+| Phase 3 | [Native browser/map/scopes](../../../../frontend/docs/evidence/member3-integration/phase3-forecast-browser-native.json), [HTTP/read-only](../../../../frontend/docs/evidence/member3-integration/phase3-forecast-http-native.json), [explicit scopes](../../../../frontend/docs/evidence/member3-integration/phase3-forecast-scopes-http-native.json), [verification](../../../../frontend/docs/evidence/member3-integration/phase3-forecast-verification.json) PASS. 234 frontend/54 SDK/875 backend tests; typecheck/build PASS. |
+| Phase 4–6 | Chưa triển khai; local preview does not connect operational Accept/Event/Replay. |
+| Forecast public contract | User-authorized [0.9.0 extension](../../../M3_FORECAST_API_HANDOFF_20261007.md), separate sealed build/receipts from received 0.8.0. |
 | Pre-cleanup E2E / post-cleanup E2E | Chưa chạy; hai receipts riêng bắt buộc, không dùng Foundation receipt thay. |
 | Artifact/import/secret audit | Chưa chạy cho migration đầy đủ; cần backend production build thực tế P7. |
 

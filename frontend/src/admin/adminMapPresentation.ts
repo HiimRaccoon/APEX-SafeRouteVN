@@ -21,15 +21,20 @@ export function createAdminMapPresentation(
 ): AdminMapPresentation {
   if (snapshot.backend) {
     const accepted = snapshot.planState.acceptedExecution;
-    const base = createMapScene(snapshot);
-    const description = describeSuppliedRouteLegs(base.accepted);
-    const segments = base.accepted.filter(s => visibleVehicleIds.includes(s.vehicleId) && !s.returnToDepot).map(segment => {
+    const validSelected = selected && selected.id === snapshot.planState.selectedAlternativeId && selected.nativeForecast &&
+      !snapshot.backend.stale && !snapshot.backend.error && snapshot.planState.proposedAlternatives.some(p => p.id === selected.id) &&
+      proposalCurrency(selected, snapshot) === "CURRENT" ? selected : undefined;
+    const base = createMapScene(snapshot, validSelected);
+    const source = validSelected ? "PROPOSED" : accepted ? "ACCEPTED" : null;
+    const sourceSegments = validSelected ? base.proposed : base.accepted;
+    const description = describeSuppliedRouteLegs(sourceSegments);
+    const segments = sourceSegments.filter(s => visibleVehicleIds.includes(s.vehicleId) && !s.returnToDepot).map(segment => {
       const leg = description.bySegmentId.get(segment.id)!;
       return { ...segment, legId: leg.id, color: leg.color };
     });
     const visibleLegIds = new Set(segments.map(s => s.legId));
-    return { scene: { ...base, accepted: segments, proposed: [], vehicleColors: Object.fromEntries(snapshot.decisionState.vehicles.map(v => [v.id, adminVehicleColor(v.id)])) },
-      legs: description.legs.filter(leg => visibleLegIds.has(leg.id)), source: accepted ? "ACCEPTED" : null, completionAvailable: false };
+    return { scene: { ...base, accepted: validSelected ? [] : segments, proposed: validSelected ? segments : [], vehicleColors: Object.fromEntries(snapshot.decisionState.vehicles.map(v => [v.id, adminVehicleColor(v.id)])) },
+      legs: description.legs.filter(leg => visibleLegIds.has(leg.id)), source, completionAvailable: false };
   }
   const active = snapshot.planState.acceptedPlans.find((p) => p.id === snapshot.planState.activeAcceptedPlanId);
   const validSelected = selected && snapshot.planState.selectedAlternativeId === selected.id &&

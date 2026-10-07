@@ -51,23 +51,23 @@ describe("S1 initial offline roads and dispatch lifecycle", () => {
       expect(buildOfflineRoadAlternatives(initial.decisionState, bundle)).not.toBeNull();
       const snapshot = await api.optimize();
       const proposals = snapshot.planState.proposedAlternatives;
-      expect(proposals.map((proposal) => proposal.content.profile)).toEqual(["FASTEST", "BALANCED", "SAFER"]);
+      expect(proposals.map((proposal) => proposal.content!.profile)).toEqual(["FASTEST", "BALANCED", "SAFER"]);
       expect(snapshot.planState.activeAcceptedPlanId).toBeNull();
       for (const proposal of proposals) {
-        expect(proposal.content.provenance).toMatchObject({ source: "Member 2 offline runtime", scenarioId: "S1",
+        expect(proposal.content!.provenance).toMatchObject({ source: "Member 2 offline runtime", scenarioId: "S1",
           buildSha256: "80694f511dc735d0b6a1a0a830edd7f6267df395e87dad0ccf180914b49d5a41" });
-        const witness = pack!.alternatives.find((alternative) => alternative.profile === proposal.content.profile)!;
+        const witness = pack!.alternatives.find((alternative) => alternative.profile === proposal.content!.profile)!;
         expect(witness.scenario_id).toBe("S1");
         expect(["FEASIBLE", "PARTIAL"]).toContain(witness.status);
         expect([...witness.served_orders, ...witness.unserved_orders.map((order) => order.order_id)].sort()).toEqual([
           "O001", "O002", "O003", "O004", "O005", "O006", "O007", "O008"
         ]);
-        expect(proposal.content.unserved).toEqual(witness.unserved_orders.map((order) => ({ orderId: order.order_id, reason: order.reason })));
-        const segments = proposal.content.vehiclePlans.flatMap((vehicle) => vehicle.routeSegments);
+        expect(proposal.content!.unserved).toEqual(witness.unserved_orders.map((order) => ({ orderId: order.order_id, reason: order.reason })));
+        const segments = proposal.content!.vehiclePlans.flatMap((vehicle) => vehicle.routeSegments);
         expect(segments.length).toBeGreaterThan(8);
         expect(segments.every((segment) => segment.geometrySource === "MEMBER2_SUPPLIED")).toBe(true);
         expect(segments.some((segment) => segment.geometry.coordinates.length > 2)).toBe(true);
-        for (const vehicle of proposal.content.vehiclePlans) {
+        for (const vehicle of proposal.content!.vehiclePlans) {
           const source = witness.vehicle_routes.find((route) => route.vehicle_id === vehicle.vehicleId);
           expect(vehicle.routeSegments.map((segment) => segment.geometry.coordinates)).toEqual(
             source?.actions.filter((action) => action.kind === "EDGE").map((action) => action.geometry) ?? []);

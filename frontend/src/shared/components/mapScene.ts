@@ -1,5 +1,6 @@
 import type { DispatchSnapshot, ProposedAlternative } from "../types/dispatch";
 import type { GeoJsonPolygon } from "../types/scenario";
+import { proposalCurrency } from "../../integrations/member3/revision";
 
 type Point = [longitude: number, latitude: number];
 
@@ -52,7 +53,9 @@ export function createMapScene(snapshot: DispatchSnapshot, proposed?: ProposedAl
       geometrySource: segment.geometrySource ?? "SCHEMATIC_DEMO"
     }));
   }) ?? [];
-  const preview = vehicleId || snapshot.backend ? [] : proposed?.content.vehiclePlans.flatMap((vehicle) => vehicle.routeSegments.map((segment) => ({
+  const preview = vehicleId ? [] : snapshot.backend ?
+    !snapshot.backend.stale && !snapshot.backend.error && proposed?.nativeForecast && proposalCurrency(proposed, snapshot) === "CURRENT" &&
+    snapshot.planState.proposedAlternatives.some(p => p.id === proposed.id) ? proposed.nativeForecast.segments : [] : proposed?.content?.vehiclePlans.flatMap((vehicle) => vehicle.routeSegments.map((segment) => ({
     id: segment.id,
     vehicleId: vehicle.vehicleId,
     coordinates: segment.geometry.coordinates,

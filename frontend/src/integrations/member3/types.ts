@@ -93,6 +93,21 @@ export interface M3JobView {
   coverage_evaluated: boolean; served_orders: string[]; unserved_orders: Array<{ order_id: string; reason: string }>;
   plan_available: boolean; execution_view_required: true; public_api_v1_dynamic_plan_available: false;
 }
+export interface M3JobForecast {
+  schema_version: "task02-m2-job-forecast/1";
+  session_id: string;
+  job_id: string;
+  profile: import("../../shared/types/dispatch").PlanProfile;
+  input_basis: M3Basis;
+  build_sha256: string;
+  job_view: M3JobView;
+  trajectory: Record<string, unknown> | null;
+  metrics: Record<string, number> | null;
+  units: { distance: "m"; duration: "s"; action_time: "us"; cost: "VND"; mass: "kg"; geometry_crs: "WGS84"; geometry_order: "longitude_latitude"; exposure: "PROXY" };
+  metric_scope: "FORECAST_ONLY";
+  execution_mode: "SIMULATED_REPLAY";
+  real_world_observation: false;
+}
 export interface M3ComparisonReceipt {
   schema_version: "saferoute-m3-profile-submission/1"; session_id: string; comparison_id: string;
   mode: "NEW_BATCH" | "EXISTING_JOBS"; input_basis: M3Basis; profiles: import("../../shared/types/dispatch").PlanProfile[];

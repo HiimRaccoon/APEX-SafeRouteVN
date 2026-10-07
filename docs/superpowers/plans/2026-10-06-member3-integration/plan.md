@@ -10,6 +10,8 @@
 
 **Spec:** [spec.md](spec.md). **Task tracker:** [tasks.md](tasks.md). **Baseline:** commit `5e96749`, [Foundation guide](../../../../frontend/docs/member3-phase1.md).
 
+**Extension 2026-10-07:** Người dùng cho phép bổ sung SDK/public HTTP forecast còn thiếu ở 0.8.0. Xem [implementation plan](../2026-10-07-public-forecast-extension.md), [contract 0.9.0](../../../M3_FORECAST_API_HANDOFF_20261007.md) và [release mới](../../../M3_FORECAST_EXTENSION_RELEASE_20261007.md). `RuntimeClient.job_forecast` → owner-scoped GET `/jobs/{jobId}/forecast` → `adaptJobForecast`; native geometry riêng với accepted execution, local preview selection không ghi world. Các mô tả “chờ bàn giao” phía dưới là gate xuất phát của 0.8.0, được giải quyết qua extension này và evidence riêng.
+
 ## Global Constraints
 
 - Giữ layout/Admin–Driver–Leaflet/route presentation; chỉ đổi nguồn và semantics cần thiết.

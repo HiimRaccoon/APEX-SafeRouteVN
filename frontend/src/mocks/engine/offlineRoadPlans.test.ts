@@ -34,8 +34,8 @@ describe("offline road plan binding and projection", () => {
     for (const alternative of data.packs[0].alternatives) alternative.unserved_orders.push({ order_id: "O009", reason: "NOT_SERVED_BY_FOUND_WITNESS" });
     const result = buildOfflineRoadAlternatives(state, data);
     expect(result).not.toBeNull();
-    expect(result![0].content.vehiclePlans[0].routeSegments[0].geometry.coordinates).toEqual([[106.7, 10.8], [106.701, 10.801], [106.702, 10.803]]);
-    expect(result![0].content.provenance.integrationMode).toBe("LOCAL_MANUAL_ANCHOR");
+    expect(result![0].content!.vehiclePlans[0].routeSegments[0].geometry.coordinates).toEqual([[106.7, 10.8], [106.701, 10.801], [106.702, 10.803]]);
+    expect(result![0].content!.provenance.integrationMode).toBe("LOCAL_MANUAL_ANCHOR");
     expect(result![0].generatedForSessionId).toBe(state.sessionId);
     for (const mismatch of ["custody", "position", "context", "event", "payload", "validation"] as const) {
       const changed = structuredClone(state);
@@ -66,7 +66,7 @@ describe("offline road plan binding and projection", () => {
     const state = new MockStateEngine().getSnapshot().decisionState;
     const plans = buildOfflineRoadAlternatives(state, bundle());
     expect(plans).not.toBeNull();
-    const v1 = plans![0].content.vehiclePlans.find((v) => v.vehicleId === "V1")!;
+    const v1 = plans![0].content!.vehiclePlans.find((v) => v.vehicleId === "V1")!;
     expect(v1.orderedStops.map((s) => [s.kind, s.orderIds])).toEqual([["DEPOT_PICKUP", ["O001"]], ["DELIVERY", ["O001"]]]);
     expect(v1.routeSegments.map((s) => s.geometry.coordinates)).toEqual([
       [[106.7, 10.8], [106.701, 10.801], [106.702, 10.803]],
@@ -75,7 +75,7 @@ describe("offline road plan binding and projection", () => {
     ]);
     expect(v1.routeSegments.every((s) => s.geometrySource === "MEMBER2_SUPPLIED")).toBe(true);
     expect(v1.suppliedActions).toHaveLength(5);
-    expect(plans![0].content.metrics).toEqual({ distanceKm: 0.8, durationMinutes: 3, fuelCostVnd: 2000, exposureScore: 20, onTimeRate: null });
+    expect(plans![0].content!.metrics).toEqual({ distanceKm: 0.8, durationMinutes: 3, fuelCostVnd: 2000, exposureScore: 20, onTimeRate: null });
     expect(plans![0].generatedForSessionId).toBe(state.sessionId);
   });
 

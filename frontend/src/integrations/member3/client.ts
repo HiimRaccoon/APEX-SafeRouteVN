@@ -1,5 +1,6 @@
 import { Member3Error } from "./errors";
 import { parseComparisonReceipt, parseComparisonView, parseJobView } from "./jobViewAdapter";
+import { parseJobForecast } from "./forecastViewAdapter";
 import type { CompareProfilesRequest, M3ComparisonCancellation } from "./types";
 import type { M3Capabilities, M3Catalog, M3Envelope, M3ExecutionView, M3LoadedSession, M3LocationsView, M3OrdersView, M3Ready, M3VehiclesView } from "./types";
 
@@ -47,6 +48,11 @@ export class Member3Client {
   async job(sid: string, jid: string, signal?: AbortSignal) {
     const view = parseJobView(await this.request(`/api/sessions/${encodeURIComponent(sid)}/jobs/${encodeURIComponent(jid)}`, true, undefined, signal));
     if (view.input_basis.session_id !== sid || view.job_id !== jid) throw new Member3Error("INVALID_RESPONSE", "Job identity differs from requested resource.");
+    return view;
+  }
+  async jobForecast(sid: string, jid: string, signal?: AbortSignal) {
+    const view = parseJobForecast(await this.request(`/api/sessions/${encodeURIComponent(sid)}/jobs/${encodeURIComponent(jid)}/forecast`, true, undefined, signal));
+    if (view.session_id !== sid || view.job_id !== jid) throw new Member3Error("INVALID_RESPONSE", "Forecast identity differs from requested resource.");
     return view;
   }
   async cancelComparison(sid: string, cid: string, requestId: string): Promise<M3ComparisonCancellation> {

@@ -1,6 +1,7 @@
 import { Member3Client } from "../../integrations/member3/client";
 import { Member3Error } from "../../integrations/member3/errors";
-import type { M3Basis, M3Catalog, M3Session, M3ComparisonView, CompareProfilesRequest } from "../../integrations/member3/types";
+import type { M3Basis, M3Catalog, M3Session, M3ComparisonView, M3JobForecast, CompareProfilesRequest } from "../../integrations/member3/types";
+import { adaptJobForecast } from "../../integrations/member3/forecastViewAdapter";
 import { sameBasis, expectedRevision, parseBasis } from "../../integrations/member3/revision";
 import { createPendingCommandStore, type PendingCommandStore } from "../../integrations/member3/requestId";
 import { adaptScenarioCatalog, type ScenarioOption } from "../../integrations/member3/scenarioAdapter";
@@ -13,7 +14,17 @@ import type { ScenarioId } from "../../shared/types/scenario";
 import type { DispatchApi } from "./DispatchApi";
 
 interface PointerStorage { getItem(key: string): string | null; setItem(key: string, value: string): void }
-interface SessionPointer { schemaVersion: 1; session?: M3Session; pending?: { scenarioId: ScenarioId; requestId: string }; comparison?: { id: string; inputBasis: M3Basis } }
+interface SessionPointer { schemaVersion: 1; session?: M3Session; pending?: { scenarioId: ScenarioId; requestId: string }; comparison?: { id: string; inputBasis: M3Basis }; previewJobId?: string }
+function samePublicValue(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (Array.isArray(left)) return Array.isArray(right) && left.length === right.length && left.every((value, i) => samePublicValue(value, right[i]));
+  if (left && right && typeof left === "object" && typeof right === "object" && !Array.isArray(right)) {
+    const a = left as Record<string, unknown>, b = right as Record<string, unknown>;
+    return Object.keys(a).length === Object.keys(b).length && Object.keys(a).every(key => key in b && samePublicValue(a[key], b[key]));
+  }
+  return false;
+}
+function forecastCapabilities(fresh: boolean) { return { ...phase2Capabilities(fresh), forecastGeometry: fresh }; }
 function browserStorage(): PointerStorage | undefined {
   try { return typeof window === "undefined" ? undefined : window.localStorage; } catch { return undefined; }
 }
@@ -39,6 +50,7 @@ export class BackendDispatchApi implements DispatchApi {
   private readonly polling: PollCoordinator;
   private snapshot?: DispatchSnapshot;
   private comparison?: M3ComparisonView;
+  private readonly forecasts = new Map<string, M3JobForecast>();
   private scenarios: ScenarioOption[] = [];
   private pollWorldRead?: Promise<DispatchSnapshot>;
   private queuedOperations = 0;
@@ -57,7 +69,7 @@ export class BackendDispatchApi implements DispatchApi {
         void read.finally(() => { if (this.pollWorldRead === read) this.pollWorldRead = undefined; }).catch(() => {});
         return read;
       },
-      readComparison: (sid, cid, signal) => this.client.comparison(sid, cid, signal),
+      readComparison: (sid, cid, signal) => this.readComparison(sid, cid, signal),
       publishWorld: snapshot => { this.publish(snapshot); },
       publishComparison: view => { this.bindComparison(view); if (this.snapshot) this.publish(this.snapshot); },
       onError: error => { this.markStale(error); }, now: Date.now,
@@ -72,6 +84,7 @@ export class BackendDispatchApi implements DispatchApi {
         if (saved.comparison && typeof saved.comparison.id === "string" && saved.comparison.id.length > 0 && saved.session &&
             parseBasis(saved.comparison.inputBasis).session_id === saved.session.session_id) this.pointer.comparison = saved.comparison;
         if (saved.pending && /^S[0-4]$/.test(saved.pending.scenarioId) && typeof saved.pending.requestId === "string" && saved.pending.requestId.length > 0) this.pointer.pending = saved.pending;
+        if (typeof saved.previewJobId === "string") this.pointer.previewJobId = saved.previewJobId;
       }
     } catch { /* Invalid local pointer cannot become physical authority. */ }
   }
@@ -94,7 +107,7 @@ export class BackendDispatchApi implements DispatchApi {
       if (pending.operation === "compare") return this.submitComparison();
       if (pending.operation === "cancelComparison") return this.performCancelComparison();
     }
-    if (this.pointer.comparison) this.bindComparison(await this.client.comparison(this.pointer.session.session_id, this.pointer.comparison.id));
+    if (this.pointer.comparison) this.bindComparison(await this.readComparison(this.pointer.session.session_id, this.pointer.comparison.id));
     return this.publish(this.snapshot!, true);
   }
   loadScenario(id: ScenarioId): Promise<DispatchSnapshot> { return this.enqueue(() => this.performLoadScenario(id)); }
@@ -123,6 +136,7 @@ export class BackendDispatchApi implements DispatchApi {
     }
     this.pointer = { schemaVersion: 1, session: loaded.session };
     this.comparison = undefined;
+    this.forecasts.clear();
     this.persist();
     return this.readWorld(loaded.session); // Load receipt is historical; re-read current state.
   }
@@ -216,10 +230,10 @@ export class BackendDispatchApi implements DispatchApi {
     const pending = this.commands.begin(intent);
     await this.retryCommand(() => this.client.cancelComparison(session.session_id, target.id, pending.requestId));
     this.commands.complete(pending.requestId);
-    this.bindComparison(await this.client.comparison(session.session_id, target.id));
+    this.bindComparison(await this.readComparison(session.session_id, target.id));
     return this.publish(this.snapshot!, true);
   }
-  capabilities() { return Promise.resolve(phase2Capabilities(!this.snapshot?.backend?.stale)); }
+  capabilities() { return Promise.resolve(forecastCapabilities(Boolean(this.snapshot && !this.snapshot.backend?.stale))); }
   private async retryCommand<T>(operation: () => Promise<T>): Promise<T> {
     for (let attempt = 0; ; attempt++) {
       try { return await operation(); }
@@ -234,11 +248,43 @@ export class BackendDispatchApi implements DispatchApi {
     if (!reference || view.comparison_id !== reference.id || !sameBasis(view.input_basis, reference.inputBasis)) throw new Member3Error("INVALID_RESPONSE", "Comparison binding changed.");
     this.comparison = view;
   }
+  private async readComparison(sid: string, cid: string, signal?: AbortSignal) {
+    const view = await this.client.comparison(sid, cid, signal);
+    const reference = this.pointer.comparison;
+    if (!reference || view.comparison_id !== reference.id || !sameBasis(view.input_basis, reference.inputBasis)) throw new Member3Error("INVALID_RESPONSE", "Comparison binding changed.");
+    // The existing comparison lane owns forecast reads. Certified terminal jobs are immutable.
+    const forecasts = await Promise.all(view.jobs.filter(row => row.job_id && row.view?.plan_available && !this.forecasts.has(row.job_id))
+      .map(async row => {
+        const forecast = await this.client.jobForecast(sid, row.job_id!, signal);
+        if (forecast.profile !== row.profile || !sameBasis(forecast.input_basis, row.view!.input_basis) || !samePublicValue(forecast.job_view, row.view)) {
+          throw new Member3Error("INVALID_RESPONSE", "Forecast differs from certified comparison job.");
+        }
+        return forecast;
+      }));
+    signal?.throwIfAborted();
+    forecasts.forEach(forecast => this.forecasts.set(forecast.job_id, forecast));
+    for (const row of view.jobs) {
+      const forecast = row.job_id && this.forecasts.get(row.job_id);
+      if (forecast && (forecast.profile !== row.profile || !samePublicValue(forecast.job_view, row.view))) {
+        throw new Member3Error("INVALID_RESPONSE", "Certified forecast job binding changed.");
+      }
+    }
+    return view;
+  }
   private publish(snapshot: DispatchSnapshot, fresh = false): DispatchSnapshot {
     const oldError = fresh ? undefined : this.snapshot?.backend?.error;
+    const proposedAlternatives = oldError ? [] : (this.comparison?.jobs ?? []).flatMap(row => {
+      const forecast = row.job_id && this.forecasts.get(row.job_id);
+      if (!forecast || !row.view?.plan_available) return [];
+      const proposal = adaptJobForecast(forecast, { basis: snapshot.backend!.basis, jobId: row.job_id!, profile: row.profile,
+        comparisonId: this.comparison!.comparison_id, vehicleIds: snapshot.decisionState.vehicles.map(v => v.id), deliveredPrefix: snapshot.backend!.executionView.delivered_prefix });
+      return proposal ? [proposal] : [];
+    });
+    const selectedAlternativeId = proposedAlternatives.some(p => p.id === this.pointer.previewJobId) ? this.pointer.previewJobId! : null;
     const next: DispatchSnapshot = { ...snapshot, backend: { ...snapshot.backend!, scenarios: this.scenarios, comparison: this.comparison,
       jobs: Object.fromEntries((this.comparison?.jobs ?? []).flatMap(row => row.view ? [[row.view.job_id, row.view]] : [])),
-      stale: Boolean(oldError), error: oldError, capabilities: phase2Capabilities(!oldError) } };
+      stale: Boolean(oldError), error: oldError, capabilities: forecastCapabilities(!oldError) },
+      planState: { ...snapshot.planState, proposedAlternatives, selectedAlternativeId } };
     this.snapshot = next;
     for (const listener of this.listeners) listener(next);
     return next;
@@ -246,7 +292,8 @@ export class BackendDispatchApi implements DispatchApi {
   private markStale(error: unknown) {
     if (!this.snapshot?.backend || error instanceof DOMException && error.name === "AbortError") return;
     const value = error instanceof Member3Error ? { code: error.code, message: error.message } : { code: "BACKEND_ERROR", message: "M3 read/action failed." };
-    this.snapshot = { ...this.snapshot, backend: { ...this.snapshot.backend, stale: true, error: value, capabilities: phase2Capabilities(false) } };
+    this.snapshot = { ...this.snapshot, planState: { ...this.snapshot.planState, proposedAlternatives: [], selectedAlternativeId: null },
+      backend: { ...this.snapshot.backend, stale: true, error: value, capabilities: forecastCapabilities(false) } };
     for (const listener of this.listeners) listener(this.snapshot);
   }
   private resumePolling() {
@@ -255,7 +302,13 @@ export class BackendDispatchApi implements DispatchApi {
     this.polling.watchWorld(session.session_id);
     if (this.comparison && !terminalComparison(this.comparison)) this.polling.watchComparison(session.session_id, this.comparison.comparison_id);
   }
-  selectAlternative(_id: string) { return this.unsupported(); }
+  selectAlternative(id: string): Promise<DispatchSnapshot> {
+    if (!this.snapshot || this.snapshot.backend?.stale || this.queuedOperations || !this.snapshot.planState.proposedAlternatives.some(p => p.id === id)) {
+      return Promise.reject(new Member3Error("PREVIEW_UNAVAILABLE", "No current certified forecast is available for preview."));
+    }
+    this.pointer.previewJobId = id; this.persist();
+    return Promise.resolve(this.publish(this.snapshot));
+  }
   acceptSelectedPlan() { return this.unsupported(); }
   triggerFixtureEvent(_id: string) { return this.unsupported(); }
   setUrgentOrderEnabled(_enabled: boolean) { return this.unsupported(); }

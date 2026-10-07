@@ -50,6 +50,8 @@ Tất cả HTTP đọc envelope `saferoute-m3-http-response/1`, giữ `request_i
 
 Nguồn chính: [M3 API handoff](../../../M3_API_HANDOFF.md), [OpenAPI 0.8.0](../../../M3_OPENAPI_20261006.json), `backend/api/routers/`, `backend/models/http.py`, `backend/models/playback.py`, `optimization/runtime/contracts.py`. Source/OpenAPI bàn giao phải có trong môi trường triển khai; không giả định mọi file backend đã publish trong repo frontend.
 
+**Bổ sung được người dùng cho phép ngày 2026-10-07:** [public forecast extension M3 0.9.0](../../../M3_FORECAST_API_HANDOFF_20261007.md), [OpenAPI mới](../../../M3_OPENAPI_20261007.json), [release riêng](../../../M3_FORECAST_EXTENSION_RELEASE_20261007.md). `GET /jobs/{jobId}/forecast` cung cấp certified proposal trước Accept, full basis/build/owner binding; SDK và HTTP là extension do M4 thực hiện theo yêu cầu, không phải API đã có trong bàn giao 0.8.0. Không đổi solver, M1 fixtures hoặc receipt lịch sử.
+
 Các đường dẫn dưới đây có prefix `/api/sessions/{sid}` khi ghi bắt đầu bằng `/...` trong nhóm session.
 
 | Phase | Endpoint thật | Request/ý nghĩa |
@@ -97,6 +99,8 @@ Coordinator schedule sau khi request hoàn thành: world mặc định 2500 ms k
 **FR-03:** Adapter job/comparison/execution view chuyển backend payload sang card/map model hiện tại. EDGE geometry giữ nguyên; KPI có đơn vị và scope `FORECAST_ONLY`/observed-prefix/planned-suffix/projected-whole, missing/null hiện unavailable. Không dùng mock exposure scaling/fuel calculation để giả metric backend. Provenance có session/job/profile/full basis/build; raw proxy units chỉ đổi đơn vị khi contract định nghĩa, không tự gọi là xác suất rủi ro.
 
 **Phụ thuộc hợp đồng cần M3 bàn giao:** Source hiện tại của GET job và comparison không trả forecast trajectory trước Accept. GET state chỉ trả **current accepted** trajectory. M4 cần public, owner-scoped, read-only forecast view bound vào job/profile/full input basis/build để preview cả ba proposal. M3 xác nhận endpoint/schema/examples và nguồn certified M2 geometry; tài liệu này không tự đặt endpoint đã tồn tại. Không Accept ngầm để lấy geometry, không đọc private store/solver files từ browser. Trong lúc chờ vẫn làm KPI/comparison và adapter accepted execution; proposal geometry phải hiện unavailable, Phase 3 chưa DONE.
+
+Đoạn trên ghi dependency của release 0.8.0 tại thời điểm lập spec. Dependency đã được xử lý bằng extension 0.9.0 được người dùng cho phép; nghiệm thu theo [plan bổ sung](../2026-10-07-public-forecast-extension.md) và receipts mới, không thay bằng chứng của release cũ. Chỉ tick Phase 3 khi read-only geometry và non-null metric scopes đã qua native gate. Public rain polygon và completed-action mapping chưa có contract nên hiển thị unavailable.
 
 Weather polygon tương tự: GET events hiện chỉ có ID/type/time/apply_allowed. Nếu public current-world không có polygon/context thì không dựng rain overlay từ fixture; ghi rõ unavailable và yêu cầu public context contract nếu muốn giữ overlay thật.
 

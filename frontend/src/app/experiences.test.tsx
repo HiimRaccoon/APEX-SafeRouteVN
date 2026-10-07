@@ -223,9 +223,9 @@ describe("Admin and Driver experiences", () => {
       override async optimize() {
         const snapshot = await super.optimize();
         for (const proposal of snapshot.planState.proposedAlternatives) {
-          proposal.content.provenance.source = "Member 2 offline runtime";
-          proposal.content.metrics.onTimeRate = null;
-          proposal.content.metrics.exposureScore = 234;
+          proposal.content!.provenance.source = "Member 2 offline runtime";
+          proposal.content!.metrics.onTimeRate = null;
+          proposal.content!.metrics.exposureScore = 234;
         }
         return snapshot;
       }
@@ -273,8 +273,8 @@ describe("Admin and Driver experiences", () => {
     class CustomMetricsApi extends MockDispatchApi {
       override async optimize() {
         const snapshot = await super.optimize();
-        snapshot.planState.proposedAlternatives[0].content.metrics.fuelCostVnd = 123000;
-        snapshot.planState.proposedAlternatives[0].content.metrics.exposureScore = 234;
+        snapshot.planState.proposedAlternatives[0].content!.metrics.fuelCostVnd = 123000;
+        snapshot.planState.proposedAlternatives[0].content!.metrics.exposureScore = 234;
         return snapshot;
       }
     }
