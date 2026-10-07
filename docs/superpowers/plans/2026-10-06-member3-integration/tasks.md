@@ -1,6 +1,6 @@
 # SafeRoute VN — Member 3 Integration Tasks
 
-**Cập nhật:** 2026-10-06. Đọc [spec.md](spec.md) và [plan.md](plan.md) trước thực hiện. Chỉ có **7 phase lớn**, task IDs bên trong là checklist triển khai.
+**Cập nhật:** 2026-10-07. Đọc [spec.md](spec.md) và [plan.md](plan.md) trước thực hiện. Chỉ có **7 phase lớn**, task IDs bên trong là checklist triển khai.
 
 `[x]` = implementation + evidence hiện có; `[ ]` = chưa làm hoặc chưa nghiệm thu. Ghi BLOCKED chỉ trên task có phụ thuộc cụ thể; không coi mọi migration bị chặn khi còn việc độc lập. Tracker này dành cho M3 migration, không đổi trạng thái lịch sử mock Phase 1/1.5 trong `frontend/docs/tasks.md`.
 
@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | 1 — Foundation | Load/read S1 native đã PASS | Baseline tests khi bắt đầu Phase 2; không làm lại code Foundation. |
 | 2 — Optimize | PASS native S1, 196 tests; 2026-10-07 | String revision + real comparison + lifecycle/polling/error gate. |
-| 3 — Map + KPI | Chưa triển khai; proposal forecast contract cần M3 | Native geometry preview read-only, metrics/provenance/scopes đúng. |
+| 3 — Map + KPI | PARTIAL — KPI + accepted branch implemented; forecast contract BLOCKED | Native proposal geometry and non-null accepted/replay metric scopes still require acceptance evidence. |
 | 4 — Select + Accept | Chưa triển khai | Local Select + certified current-basis Accept + server state. |
 | 5 — Event + Re-optimization | Chưa triển khai | Native S2/S3/S4 barrier/apply/re-optimize đúng. |
 | 6 — Driver Execution / Replay | Chưa triển khai | Backend accepted Driver/replay controls + server session cross-tab. |

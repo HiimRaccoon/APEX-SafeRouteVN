@@ -5,6 +5,7 @@ import { acceptedView } from "../integrations/member3/acceptedTestFixture";
 import { adaptAcceptedExecution } from "../integrations/member3/executionViewAdapter";
 import { basis } from "../integrations/member3/testFixtures";
 import type { MapSegment } from "../shared/components/mapScene";
+import { createMapScene } from "../shared/components/mapScene";
 
 function acceptedS0() {
   const engine = new MockStateEngine();
@@ -21,9 +22,9 @@ describe("Admin map display preferences and operational legs", () => {
     snapshot.backend = { source: "MEMBER3_HTTP", baseUrl: "http://localhost:8000", executionMode: "SIMULATED_REPLAY", realWorldObservation: false, basis, executionView: view };
     const edge = snapshot.planState.acceptedExecution!.segments[0];
     snapshot.planState.acceptedExecution!.segments = [
-      { ...edge, id: "V1-edge-1", legId: "V1:leg:1" },
-      { ...edge, id: "V1-edge-2", legId: "V1:leg:2" },
-      { ...edge, id: "V2-edge-3", vehicleId: "V2", legId: "V2:leg:3" }
+      { ...edge, id: "V1-edge-1", legId: "V1:leg:1", returnToDepot: false },
+      { ...edge, id: "V1-edge-2", legId: "V1:leg:2", returnToDepot: false },
+      { ...edge, id: "V2-edge-3", vehicleId: "V2", legId: "V2:leg:3", returnToDepot: false }
     ] satisfies MapSegment[];
     const before = structuredClone(snapshot);
     const both = createAdminMapPresentation(snapshot, undefined, ["V1", "V2"]);
@@ -31,6 +32,36 @@ describe("Admin map display preferences and operational legs", () => {
     expect(onlyV2.legs).toEqual(both.legs.filter(l => l.vehicleId === "V2"));
     expect(onlyV2.legs[0].number).toBe(3);
     expect(both.legs.filter(l => l.vehicleId === "V1").map(l => l.number)).toEqual([1, 2]);
+    expect(snapshot).toEqual(before);
+  });
+  it("filters native return only on Admin and preserves Driver/source geometry and metrics", () => {
+    const snapshot = acceptedS0().snapshot;
+    const view = acceptedView(); Object.assign(snapshot, adaptAcceptedExecution(view));
+    snapshot.backend = { source: "MEMBER3_HTTP", baseUrl: "http://localhost:8000", executionMode: "SIMULATED_REPLAY", realWorldObservation: false, basis, executionView: view };
+    const before = structuredClone(snapshot);
+    const admin = createAdminMapPresentation(snapshot, undefined, ["V1"]);
+    expect(admin.scene.accepted).toEqual([]); expect(admin.legs).toEqual([]);
+    expect(admin.source).toBe("ACCEPTED");
+    expect(createMapScene(snapshot, undefined, "V1").accepted).toHaveLength(1);
+    expect(snapshot).toEqual(before);
+  });
+  it("uses native V1/V2 per-leg palettes without recoloring on visibility changes", () => {
+    const snapshot = acceptedS0().snapshot;
+    const view = acceptedView(); Object.assign(snapshot, adaptAcceptedExecution(view));
+    snapshot.backend = { source: "MEMBER3_HTTP", baseUrl: "http://localhost:8000", executionMode: "SIMULATED_REPLAY", realWorldObservation: false, basis, executionView: view };
+    const edge = snapshot.planState.acceptedExecution!.segments[0];
+    snapshot.planState.acceptedExecution!.segments = [
+      ...["V1", "V2"].flatMap(vehicleId => [1, 2].map(number => ({ ...edge, vehicleId, id: `${vehicleId}-edge-${number}`, legId: `${vehicleId}:leg:${number}`, returnToDepot: false }))),
+      { ...edge, vehicleId: "V2", id: "V2-return", legId: "V2:leg:3", returnToDepot: true }
+    ];
+    const before = structuredClone(snapshot);
+    const both = createAdminMapPresentation(snapshot, undefined, ["V1", "V2"]);
+    expect(both.legs.filter(l => l.vehicleId === "V1").map(l => l.color)).toEqual(["#2563eb", "#06b6d4"]);
+    expect(both.legs.filter(l => l.vehicleId === "V2").map(l => l.color)).toEqual(["#16a34a", "#14532d"]);
+    const onlyV2 = createAdminMapPresentation(snapshot, undefined, ["V2"]);
+    expect(onlyV2.legs).toEqual(both.legs.filter(l => l.vehicleId === "V2"));
+    expect(onlyV2.scene.accepted.map(s => s.color)).toEqual(["#16a34a", "#14532d"]);
+    expect(onlyV2.scene.accepted.every(s => !s.returnToDepot)).toBe(true);
     expect(snapshot).toEqual(before);
   });
   it.each([{ ids: [] }, { ids: ["V1"] }, { ids: ["V2"] }, { ids: ["V1", "V2"] }])("shows only explicitly enabled vehicle routes: $ids", ({ ids }) => {

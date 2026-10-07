@@ -56,8 +56,8 @@ it("retains return-only continuation for Admin and Driver without assuming a dec
   expect(driver.accepted).toHaveLength(1); expect(driver.proposed).toEqual([]);
   expect(createMapScene(snapshot, undefined, "V2").accepted).toEqual([]);
   const admin = createAdminMapPresentation(snapshot, undefined, ["V1"]);
-  expect(admin.source).toBe("ACCEPTED"); expect(admin.scene.accepted[0].completed).toBe(false);
-  expect(admin.scene.accepted[0].coordinates).toEqual(driver.accepted[0].coordinates);
+  expect(admin.source).toBe("ACCEPTED"); expect(admin.scene.accepted).toEqual([]);
+  expect(mapped.planState.acceptedExecution!.segments[0].coordinates).toEqual(driver.accepted[0].coordinates);
   expect(createAdminMapPresentation(snapshot, undefined, []).scene.accepted).toEqual([]);
 });
 it("allows prior delivered orders to be absent from a reoptimized return trajectory", () => {

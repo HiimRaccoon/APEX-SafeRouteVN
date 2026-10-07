@@ -3,7 +3,7 @@ import { CloudRain, Navigation, Plus, Minus } from "lucide-react";
 import type { DispatchSnapshot } from "../shared/types/dispatch";
 import { createMapScene, type MapScene } from "../shared/components/mapScene";
 import { LeafletCanvas, type LeafletCanvasHandle } from "../shared/components/LeafletCanvas";
-import { describeRouteLegs, vehicleRouteColor } from "../shared/components/routeLegPresentation";
+import { describeRouteLegs, describeSuppliedRouteLegs, vehicleRouteColor } from "../shared/components/routeLegPresentation";
 
 interface DriverMapProps {
   snapshot: DispatchSnapshot;
@@ -17,12 +17,11 @@ export function DriverMap({ snapshot, vehicleId = "V1" }: DriverMapProps) {
   const base = createMapScene(snapshot, undefined, vehicleId);
   const active = snapshot.planState.acceptedPlans.find((p) => p.id === snapshot.planState.activeAcceptedPlanId);
   const vehicle = active?.plan.vehiclePlans.find((v) => v.vehicleId === vehicleId);
-  const description = vehicle ? describeRouteLegs(vehicle) : undefined;
+  const description = snapshot.backend ? describeSuppliedRouteLegs(base.accepted) : vehicle ? describeRouteLegs(vehicle) : undefined;
   const scene: MapScene = {
     ...base,
     vehicleColors: { [vehicleId]: vehicleRouteColor(vehicleId) },
     accepted: base.accepted.flatMap((segment) => {
-      if (snapshot.backend) return [{ ...segment, color: vehicleRouteColor(segment.vehicleId) }];
       const leg = description?.bySegmentId.get(segment.id);
       return leg ? [{ ...segment, legId: leg.id, color: leg.color }] : [];
     })
