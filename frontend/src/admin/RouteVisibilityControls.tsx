@@ -14,7 +14,7 @@ export function RouteVisibilityControls({ vehicleIds, visibility, presentation, 
     <h3>Route visibility</h3>
     <p className="route-visibility-source">
       {presentation.source === "PROPOSED" ? "Proposed route · Preview only" :
-        presentation.source === "ACCEPTED" ? "Accepted route · Remaining travel" : "No plan to display yet"}
+        presentation.source === "ACCEPTED" ? presentation.completionAvailable === false ? "Accepted route · Completion unavailable" : "Accepted route · Remaining travel" : "No plan to display yet"}
     </p>
     </div>
     <div className="route-visibility-switches">

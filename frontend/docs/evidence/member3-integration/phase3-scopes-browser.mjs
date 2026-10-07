@@ -51,6 +51,16 @@ try {
   assert.equal(projected.snapshot.planState.acceptedExecution, null);
   assert.deepEqual(projected.snapshot.planState.proposedAlternatives, []);
   assert.equal(projected.snapshot.backend.metrics.observed.values.distance_m, null);
+  for (const width of [1280, 1440, 1920]) {
+    await page.setViewport({ width, height: 1100 });
+    const overflow = await page.$$eval('[data-metric-scope="FORECAST_ONLY"] .alt-metric-item', els => els.filter(el => {
+      const card = el.closest('.alt-card').getBoundingClientRect();
+      const value = el.querySelector('strong').getBoundingClientRect();
+      return el.scrollWidth > el.clientWidth + 1 || value.right > card.right + 1 || value.left < card.left - 1;
+    }).map(el => el.textContent));
+    assert.deepEqual(overflow, [], `KPI overflow at ${width}px`);
+  }
+  await page.setViewport({ width: 1440, height: 1100 });
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.waitForFunction(id => document.querySelector(".admin-page")?.dataset.comparisonId === id, {}, pointer.comparison.id);
   const after = await get(`/api/sessions/${session.session_id}/state`);
@@ -59,7 +69,7 @@ try {
   await page.screenshot({ path: new URL("./phase3-scopes-native.png", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1"), fullPage: true });
   const receipt = { status: "M3_PHASE3_SCOPED_KPI_NATIVE_PASS", phase3Complete: false, recordedAt: new Date().toISOString(), ready, sessionId: session.session_id,
     before, comparison, projected, after, requests, errors,
-    assertions: ["API and worker ready", "public comparison metrics equal adapter and rendered cards", "separate execution scopes with null observed values", "refresh preserves session and comparison", "read-only GET/OPTIONS only", "world unchanged"],
+    assertions: ["API and worker ready", "public comparison metrics equal adapter and rendered cards", "separate execution scopes with null observed values", "native KPI bounds fit cards at 1280/1440/1920px", "refresh preserves session and comparison", "read-only GET/OPTIONS only", "world unchanged"],
     limitations: ["Forecast geometry public contract pending; full Phase 3 is not accepted", "Accepted geometry tested with public contract fixtures, not a new native Accept/replay run"] };
   await writeFile(new URL("./phase3-scopes-native.json", import.meta.url), JSON.stringify(receipt, null, 2));
   console.log(JSON.stringify({ status: receipt.status, phase3Complete: false, sessionId: session.session_id }));

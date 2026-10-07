@@ -7,9 +7,11 @@ import { basis, comparison } from "../integrations/member3/testFixtures";
 import { phase2Capabilities } from "../integrations/member3/capabilities";
 import type { DispatchSnapshot } from "../shared/types/dispatch";
 import type { M3ComparisonView, M3ExecutionView } from "../integrations/member3/types";
+import { acceptedView } from "../integrations/member3/acceptedTestFixture";
+import { adaptAcceptedExecution } from "../integrations/member3/executionViewAdapter";
 
 class BackendView extends MockDispatchApi {
-  constructor(private stale: boolean, private running: boolean, private metrics = false) { super(); }
+  constructor(private stale: boolean, private running: boolean, private metrics = false, private accepted = false) { super(); }
   override subscribe(_listener: (snapshot: DispatchSnapshot) => void) { return () => {}; }
   override async getSnapshot() {
     const s = await super.getSnapshot(); s.decisionState.sessionId = basis.session_id;
@@ -20,6 +22,7 @@ class BackendView extends MockDispatchApi {
       basis, executionView: { observed_metrics: null, planned_suffix_metrics: null, projected_whole_metrics: null } as M3ExecutionView, comparison: c, capabilities: phase2Capabilities(!this.stale), stale: this.stale,
       error: this.stale ? { code: "UNAUTHORIZED", message: "Token expired" } : undefined,
       scenarios: [{ id: "S0", orderCount: 17, vehicleCount: 4, initialTime: "2026-09-27T21:00:00+07:00", fixtureSha256: "a".repeat(64) }] };
+    if (this.accepted) Object.assign(s, adaptAcceptedExecution(acceptedView()));
     return s;
   }
 }
@@ -30,6 +33,16 @@ it("renders server lifecycle/verdict without fake metrics, routes or recommendat
   expect(screen.getAllByText(/Certified witness/)).toHaveLength(3);
   expect(screen.queryByText("Recommended")).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Select FASTEST" })).toBeDisabled();
+});
+it("truthfully labels a native accepted Driver route while stop operations remain deferred", async () => {
+  render(<MemoryRouter initialEntries={["/driver"]}><App api={new BackendView(false, false, false, true)} /></MemoryRouter>);
+  expect(await screen.findByText(/Accepted route.*SAFER/)).toBeInTheDocument();
+  expect(screen.queryByText("No dispatch plan has been assigned yet.")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Confirm Pickup|Confirm Delivery/ })).not.toBeInTheDocument();
+});
+it("labels native accepted geometry completion unavailable on Admin", async () => {
+  render(<MemoryRouter initialEntries={["/admin"]}><App api={new BackendView(false, false, false, true)} /></MemoryRouter>);
+  expect(await screen.findByText("Accepted route · Completion unavailable")).toBeInTheDocument();
 });
 it("renders native forecast units and provenance without inventing fuel or observed KPIs", async () => {
   render(<MemoryRouter initialEntries={["/admin"]}><App api={new BackendView(false, false, true)} /></MemoryRouter>);

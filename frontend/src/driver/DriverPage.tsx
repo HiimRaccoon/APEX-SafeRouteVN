@@ -418,6 +418,7 @@ export function DriverPage() {
 
   const vehicle = snapshot.decisionState.vehicles.find((v) => v.id === selectedVehicleId);
   const vehicleLocked = vehicle?.availability === "UNAVAILABLE";
+  const nativeAccepted = snapshot.backend ? snapshot.planState.acceptedExecution : null;
 
   const progress =
     activePlan && v1Plan
@@ -439,6 +440,7 @@ export function DriverPage() {
   const v1Orders = snapshot.decisionState.orders.filter(
     (order) =>
       order.assignedVehicleId === selectedVehicleId ||
+      nativeAccepted?.vehicleOrderIds[selectedVehicleId]?.includes(order.id) ||
       v1Plan?.orderedStops.some((s) => s.orderIds.includes(order.id))
   );
 
@@ -668,7 +670,14 @@ export function DriverPage() {
               className="drv-stop-section"
               aria-labelledby="drv-current-stop-heading"
             >
-              {!activePlan || !v1Plan || v1Plan.orderedStops.length === 0 ? (
+              {nativeAccepted ? (
+                <div className="drv-empty-card" role="status">
+                  <h2 className="drv-empty-title" id="drv-current-stop-heading">Accepted route · {nativeAccepted.profile}</h2>
+                  <p className="drv-empty-desc">{nativeAccepted.jobId} · Simulated replay</p>
+                  <p className="drv-empty-desc">Stop operations and completed travel are unavailable until public execution progress is connected.</p>
+                  {!nativeAccepted.vehicleOrderIds[selectedVehicleId] && <p>No assigned continuation for {selectedVehicleId}.</p>}
+                </div>
+              ) : !activePlan || !v1Plan || v1Plan.orderedStops.length === 0 ? (
                 /* Empty state before accept */
                 <div className="drv-empty-card" role="status">
                   <div className="drv-empty-icon-wrap">

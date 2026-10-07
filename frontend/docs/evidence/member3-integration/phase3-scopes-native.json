@@ -1,10 +1,10 @@
 {
   "status": "M3_PHASE3_SCOPED_KPI_NATIVE_PASS",
   "phase3Complete": false,
-  "recordedAt": "2026-10-07T02:18:08.646Z",
+  "recordedAt": "2026-10-07T02:33:59.315Z",
   "ready": {
     "schema_version": "saferoute-m3-http-response/1",
-    "request_id": "9ffb65a7-888f-47b5-8eff-fda0514d68ba",
+    "request_id": "271a7e28-54fe-4f4f-a925-719065c3f289",
     "status": "OK",
     "data": {
       "ready": true,
@@ -31,7 +31,7 @@
   "sessionId": "session-1354a1db5cca45e48a58769ec613209a",
   "before": {
     "schema_version": "saferoute-m3-http-response/1",
-    "request_id": "ac497e8c-a49d-49bd-ae61-08af0d349a08",
+    "request_id": "4987a2b2-38ee-4466-b808-af6589cabc4e",
     "status": "OK",
     "data": {
       "schema_version": "task02-m2-execution-view/2",
@@ -141,7 +141,7 @@
   },
   "comparison": {
     "schema_version": "saferoute-m3-http-response/1",
-    "request_id": "63169fa3-6650-4f26-88c9-0c7302851629",
+    "request_id": "5595b6b0-cca9-4164-898d-5d0b0a313596",
     "status": "OK",
     "data": {
       "schema_version": "saferoute-m3-profile-comparison/1",
@@ -1497,7 +1497,7 @@
   },
   "after": {
     "schema_version": "saferoute-m3-http-response/1",
-    "request_id": "0db46203-2cf1-4056-9ec9-1e56136a8bd2",
+    "request_id": "7f735268-24c7-4077-ae05-8044878ed5ff",
     "status": "OK",
     "data": {
       "schema_version": "task02-m2-execution-view/2",
@@ -1695,30 +1695,6 @@
       "method": "OPTIONS"
     },
     {
-      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/vehicles",
-      "method": "GET"
-    },
-    {
-      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/vehicles",
-      "method": "OPTIONS"
-    },
-    {
-      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/locations",
-      "method": "GET"
-    },
-    {
-      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/locations",
-      "method": "OPTIONS"
-    },
-    {
-      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/state",
-      "method": "GET"
-    },
-    {
-      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/state",
-      "method": "OPTIONS"
-    },
-    {
       "path": "/api/scenarios",
       "method": "GET"
     },
@@ -1735,14 +1711,6 @@
       "method": "OPTIONS"
     },
     {
-      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/orders",
-      "method": "GET"
-    },
-    {
-      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/orders",
-      "method": "OPTIONS"
-    },
-    {
       "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/vehicles",
       "method": "GET"
     },
@@ -1756,14 +1724,6 @@
     },
     {
       "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/orders",
-      "method": "OPTIONS"
-    },
-    {
-      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/vehicles",
-      "method": "GET"
-    },
-    {
-      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/vehicles",
       "method": "OPTIONS"
     },
     {
@@ -1772,6 +1732,38 @@
     },
     {
       "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/locations",
+      "method": "OPTIONS"
+    },
+    {
+      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/vehicles",
+      "method": "GET"
+    },
+    {
+      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/vehicles",
+      "method": "OPTIONS"
+    },
+    {
+      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/state",
+      "method": "GET"
+    },
+    {
+      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/state",
+      "method": "OPTIONS"
+    },
+    {
+      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/locations",
+      "method": "GET"
+    },
+    {
+      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/locations",
+      "method": "OPTIONS"
+    },
+    {
+      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/orders",
+      "method": "GET"
+    },
+    {
+      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/orders",
       "method": "OPTIONS"
     },
     {
@@ -1849,6 +1841,70 @@
     {
       "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/state",
       "method": "OPTIONS"
+    },
+    {
+      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/orders",
+      "method": "GET"
+    },
+    {
+      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/orders",
+      "method": "OPTIONS"
+    },
+    {
+      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/vehicles",
+      "method": "GET"
+    },
+    {
+      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/vehicles",
+      "method": "OPTIONS"
+    },
+    {
+      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/locations",
+      "method": "GET"
+    },
+    {
+      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/locations",
+      "method": "OPTIONS"
+    },
+    {
+      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/state",
+      "method": "GET"
+    },
+    {
+      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/state",
+      "method": "OPTIONS"
+    },
+    {
+      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/orders",
+      "method": "GET"
+    },
+    {
+      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/orders",
+      "method": "OPTIONS"
+    },
+    {
+      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/vehicles",
+      "method": "GET"
+    },
+    {
+      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/vehicles",
+      "method": "OPTIONS"
+    },
+    {
+      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/locations",
+      "method": "GET"
+    },
+    {
+      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/locations",
+      "method": "OPTIONS"
+    },
+    {
+      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/state",
+      "method": "GET"
+    },
+    {
+      "path": "/api/sessions/session-1354a1db5cca45e48a58769ec613209a/state",
+      "method": "OPTIONS"
     }
   ],
   "errors": [],
@@ -1856,6 +1912,7 @@
     "API and worker ready",
     "public comparison metrics equal adapter and rendered cards",
     "separate execution scopes with null observed values",
+    "native KPI bounds fit cards at 1280/1440/1920px",
     "refresh preserves session and comparison",
     "read-only GET/OPTIONS only",
     "world unchanged"

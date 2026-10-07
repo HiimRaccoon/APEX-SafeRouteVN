@@ -18,6 +18,9 @@ export interface MapSegment {
   fractionEnd?: number;
   fractionStartExact?: string;
   returnToDepot?: boolean;
+  /** Native full source coordinates stay above; this interval alone is drawable. */
+  drawableCoordinates?: Point[];
+  completionAvailable?: boolean;
 }
 
 export interface MapMarker {
@@ -56,7 +59,7 @@ export function createMapScene(snapshot: DispatchSnapshot, proposed?: ProposedAl
     completed: false,
     geometrySource: segment.geometrySource ?? "SCHEMATIC_DEMO"
   }))) ?? [];
-  const driverOrderIds = vehicleId ? new Set(active?.plan.vehiclePlans.find((vehicle) => vehicle.vehicleId === vehicleId)?.orderedStops.flatMap((stop) => stop.orderIds) ?? []) : null;
+  const driverOrderIds = vehicleId ? new Set(snapshot.backend ? snapshot.planState.acceptedExecution?.vehicleOrderIds[vehicleId] ?? [] : active?.plan.vehiclePlans.find((vehicle) => vehicle.vehicleId === vehicleId)?.orderedStops.flatMap((stop) => stop.orderIds) ?? []) : null;
   return {
     accepted,
     proposed: preview,

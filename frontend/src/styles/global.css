@@ -2076,6 +2076,21 @@ input[type="range"].slider-input::-moz-range-track {
 
 .alt-metric-val.m-success { color: #16A34A; }
 
+.admin-page[data-dispatch-source="MEMBER3_HTTP"] .panel-di {
+  overflow-y: auto;
+}
+
+/* Native values retain declared units and precision within the existing card shell. */
+.alt-metrics-grid[data-metric-scope="FORECAST_ONLY"] .alt-metric-item {
+  flex-wrap: wrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.alt-metrics-grid[data-metric-scope="FORECAST_ONLY"] .alt-metric-val {
+  max-width: 100%;
+  margin-left: 0;
+}
+
 /* Legacy metric rows (kept for backward compat) */
 .alt-metrics { display: flex; flex-direction: column; gap: 0; }
 .metric-row  { display: flex; justify-content: space-between; align-items: center; height: 26px; border-bottom: 1px solid #F1F5F9; gap: 4px; }

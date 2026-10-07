@@ -86,7 +86,7 @@ export function LeafletCanvas({ scene, mapHandle, driver = false, onTileUnavaila
     const renderRoutes = (segments: MapScene["accepted"], proposed: boolean) => {
       const groups = new Map<string, { vehicleId: string; completed: boolean; color?: string; lines: L.LatLngTuple[][] }>();
       for (const segment of segments) {
-        const points = segment.coordinates.map(latLng);
+        const points = (segment.drawableCoordinates ?? segment.coordinates).map(latLng);
         positions.push(...points);
         const completed = !proposed && segment.completed;
         const key = JSON.stringify([segment.vehicleId, completed, segment.legId ?? null, segment.color ?? null]);

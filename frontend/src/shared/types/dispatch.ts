@@ -114,6 +114,7 @@ export interface PlanState {
     profile: PlanProfile;
     basis: import("../../integrations/member3/types").M3Basis;
     segments: import("../components/mapScene").MapSegment[];
+    vehicleOrderIds: Record<string, string[]>;
     unserved: { orderId: string; reason: string }[];
   } | null;
   acceptedPlans: AcceptedPlanRecord[];

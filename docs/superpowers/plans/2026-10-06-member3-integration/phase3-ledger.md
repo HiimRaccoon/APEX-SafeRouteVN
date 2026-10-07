@@ -17,3 +17,15 @@ TDD: initial adapter stubs produced 5 failing tests; UI and map tests failed bef
 Native: API/worker startup recovered and reached READY after bounded SDK contention; read-only S1 browser gate PASS (`phase3-scopes-native.json`). Comparison/card metrics equal public payload; refresh same session/comparison; only GET/OPTIONS and before/after world equal. No Accept or forecast geometry gate claimed.
 
 P3-03: independent scoped KPI implementation/native checks complete; full Phase 3 acceptance remains pending P3-01 and proposal branch of P3-02. P3-02 accepted branch implemented and unit-tested; no new native acceptance/replay mutation performed.
+
+Final review: 6 Important, 0 Critical, 0 Minor; regraded by user effect, all six enter one TDD fix pass (see phase3-review.md). Declined-to-judge items remain explicit existing future gates; no rejected findings.
+
+Ruling: Public execution-view lacks decision_epoch or source completed action IDs, so native completion remains unavailable rather than comparing action offsets with Unix timestamps — public contract cannot prove a completed prefix — cost: dimming remains pending an authoritative public progress/time-origin handoff.
+
+Ruling: Preserve the full source EDGE geometry and add a separate drawable fraction following handed-off M2 directed haversine interpolation — partial EDGE actions carry full source polylines — cost: drawable endpoints are interpolated display points while exact source coordinates remain retained.
+
+Final: fixed all 6 Important findings in one pass — 8 unit/UI regression cases RED→GREEN (including correction of the old epoch assertion), native KPI viewport bounds RED→GREEN, and native-panel wheel scrolling RED→GREEN. Publication full suite 214/214 across 33 files, typecheck/build PASS. No deferred minors and no second review. Build retains the existing offline-pack large-chunk warning; asset cleanup is Phase 7.
+
+Final: declined-to-judge items resolve to existing authorized future gates — forecast/rain public handoff, later operational APIs/Driver stops, and Phase 7 default/import/pack/cross-tab changes remain pending; none are reported as accepted by this release.
+
+Final portable-validation checks also reproduced array-valued action kind/layer acceptance RED, then rejected these scalar-type violations GREEN within the same fix pass. Final native receipt rerun after scoped wrapping/scrolling PASS with 1280/1440/1920px bounds; no live accepted mutation performed.
