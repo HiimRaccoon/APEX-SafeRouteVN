@@ -69,11 +69,13 @@ File paths là từ root repo. Lệnh npm và node bên dưới chạy trong `fr
 
 ## Phase 3 — Map + KPI từ kết quả backend
 
+Progress 2026-10-07: comparison/scoped KPI native gate PASS; accepted execution branch has TDD coverage. Full Phase 3 is pending P3-01 public forecast geometry handoff. See `frontend/docs/member3-phase3.md` and `phase3-ledger.md`; accepted fixture tests are not native Accept/replay acceptance.
+
 ### P3-01 — Khóa public job forecast geometry contract với M3
 
 **Dependencies:** P2; **BLOCKED cho proposal geometry đến khi M3 bàn giao approved contract**. **Files:** new `frontend/docs/member3-forecast-contract.md`, sanitized public payloads `frontend/src/integrations/member3/fixtures/forecast-*.json` test-only; extend client/types sau gate. **Consumes:** actual M3 0.8.0 router/job/comparison payloads. **Produces:** approved read-only endpoint/schema/example/binding/error matrix để adaptJobForecast dùng.
 
-- [ ] Ghi bằng chứng khoảng trống hiện tại: GET job không geometry; comparison chỉ metrics/basis; GET state là accepted trajectory. Không gọi Accept ngầm hoặc invent API path trước thỏa thuận.
+- [x] Ghi bằng chứng khoảng trống hiện tại: GET job không geometry; comparison chỉ metrics/basis; GET state là accepted trajectory. Không gọi Accept ngầm hoặc invent API path trước thỏa thuận.
 - [ ] M3 cung cấp owner-scoped public forecast read từ certified M2 witness, bound job/session/profile/full basis/build; chỉ rõ no-witness/RETURN_ONLY/PARTIAL và units/EDGE fractions. Ghi endpoint/schema/chốt release nguồn vào contract note.
 - [ ] Test contract `forecast_read_does_not_mutate_world`: trước/sau read giữ generation/head/orders/custody/active_job_id; 401/403/404 và malformed/basis mismatch fail closed. Khóa public samples không token/private stores.
 - [ ] Nếu public rain context/polygon chưa có, ghi unavailable; chỉ thêm client/context adapter khi approved contract thật tồn tại. Gate DONE khi contract và native read chứng minh có geometry; không tick chỉ vì đã viết note.
@@ -91,9 +93,9 @@ File paths là từ root repo. Lệnh npm và node bên dưới chạy trong `fr
 
 **Dependencies:** P2-02; không cần chờ P3-01 cho comparison KPI. **Files:** new `metricsAdapter.ts/.test.ts`; modify shared dispatch/PlanMetrics/provenance/AdminPage/components consuming metrics, extend UI tests. **Consumes:** comparison metrics/public units/execution metric scopes. **Produces:** ScopedMetrics/adaptMetrics, backend source/session/job/profile/basis/build labels.
 
-- [ ] Test `does_not_conflate_observed_and_forecast`: observed=null stays unavailable; planned/projected values riêng; no sum/double count; served denominator only khi coverage_evaluated=true.
-- [ ] Test `preserves_proxy_units_and_missing_values`: fuel/on-time missing → null/placeholder, exposure không mock `/100`/`x` khi không contract, metric strings/nonfinite invalid; source MEMBER3_HTTP khác offline.
-- [ ] FAIL → implement unit-safe conversion/display (m→km/s→min khi declared); card shell giữ nguyên; targeted/full checks PASS.
+- [x] Test `does_not_conflate_observed_and_forecast`: observed=null stays unavailable; planned/projected values riêng; no sum/double count; served denominator only khi coverage_evaluated=true.
+- [x] Test `preserves_proxy_units_and_missing_values`: fuel/on-time missing → null/placeholder, exposure không mock `/100`/`x` khi không contract, metric strings/nonfinite invalid; source MEMBER3_HTTP khác offline.
+- [x] FAIL → implement unit-safe conversion/display (m→km/s→min khi declared); card shell giữ nguyên; targeted/full checks PASS.
 - [ ] Native metrics/provenance equal corresponding public job/comparison/execution scopes; ghi evidence. Phase 3 DONE chỉ khi cả geometry contract và map/KPI gate PASS.
 
 ## Phase 4 — Select + Accept thật

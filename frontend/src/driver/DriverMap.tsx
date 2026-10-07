@@ -22,6 +22,7 @@ export function DriverMap({ snapshot, vehicleId = "V1" }: DriverMapProps) {
     ...base,
     vehicleColors: { [vehicleId]: vehicleRouteColor(vehicleId) },
     accepted: base.accepted.flatMap((segment) => {
+      if (snapshot.backend) return [{ ...segment, color: vehicleRouteColor(segment.vehicleId) }];
       const leg = description?.bySegmentId.get(segment.id);
       return leg ? [{ ...segment, legId: leg.id, color: leg.color }] : [];
     })

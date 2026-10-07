@@ -18,6 +18,19 @@ export function createAdminMapPresentation(
   selected?: ProposedAlternative,
   visibleVehicleIds: readonly string[] = []
 ): AdminMapPresentation {
+  if (snapshot.backend) {
+    const accepted = snapshot.planState.acceptedExecution;
+    const base = createMapScene(snapshot);
+    const segments = base.accepted.filter(s => visibleVehicleIds.includes(s.vehicleId));
+    const byLeg = new Map<string, AdminRouteLeg>();
+    for (const segment of segments) {
+      const id = segment.legId ?? segment.id;
+      if (!byLeg.has(id)) byLeg.set(id, { id, vehicleId: segment.vehicleId, number: byLeg.size + 1,
+        targetLabel: segment.returnToDepot ? "Mandatory return continuation" : "Planned service", color: segment.color ?? adminVehicleColor(segment.vehicleId) });
+    }
+    return { scene: { ...base, accepted: segments, proposed: [], vehicleColors: Object.fromEntries(snapshot.decisionState.vehicles.map(v => [v.id, adminVehicleColor(v.id)])) },
+      legs: [...byLeg.values()], source: accepted ? "ACCEPTED" : null };
+  }
   const active = snapshot.planState.acceptedPlans.find((p) => p.id === snapshot.planState.activeAcceptedPlanId);
   const validSelected = selected && snapshot.planState.selectedAlternativeId === selected.id &&
     snapshot.planState.proposedAlternatives.some((p) => p.id === selected.id) &&

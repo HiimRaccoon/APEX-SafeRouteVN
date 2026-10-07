@@ -24,6 +24,7 @@ import { getCustomerInfo, getDriverInfo } from "../mocks/presentation";
 import { LABELS as L } from "./admin.labels";
 import { terminalComparison, comparisonCanRank } from "../integrations/member3/jobViewAdapter";
 import { sameBasis, proposalCurrency } from "../integrations/member3/revision";
+import { comparisonMetrics, executionMetrics, formatMetric } from "../integrations/member3/metricsAdapter";
 
 const profiles: PlanProfile[] = ["FASTEST", "BALANCED", "SAFER"];
 
@@ -931,6 +932,13 @@ export function AdminPage() {
               <button type="button" className="text-button" disabled={pending} onClick={() => void invoke(() => api.getSnapshot())}>Refresh backend</button>
               {comparisonRunning && api.cancelComparison && <button type="button" className="text-button" disabled={pending || backend.stale} onClick={() => void invoke(() => api.cancelComparison!())}>Cancel comparison</button>}
               {comparison && <p title={comparison.comparison_id}>M3 · {comparison.comparison_id} · head {comparison.input_basis.head_version} / generation {comparison.input_basis.generation}{comparisonCanRank(comparison) ? " · Comparable forecasts" : " · No comparative ranking"}</p>}
+              <div aria-label="Backend execution metrics">
+                {Object.values(backend.metrics ?? executionMetrics(backend.executionView)).map(metrics => <p key={metrics.scope} data-metric-scope={metrics.scope}>
+                  {metrics.scope} · Distance {formatMetric(metrics, metrics.scope === "OBSERVED_PREFIX_ONLY" ? "distance_m" : "total_distance_m", "km")} · Travel {formatMetric(metrics, metrics.scope === "OBSERVED_PREFIX_ONLY" ? "travel_time_us" : "total_travel_time_s", "min")} · Exposure {formatMetric(metrics, metrics.scope === "OBSERVED_PREFIX_ONLY" ? "relative_exposure_proxy" : "total_exposure")}
+                </p>)}
+                <p>MEMBER3_HTTP · SIMULATED_REPLAY · {backend.basis.session_id} · build {backend.basis.build_sha256} · head {backend.basis.head_version} / generation {backend.basis.generation}</p>
+                {snapshot.planState.acceptedExecution && <p>Accepted {snapshot.planState.acceptedExecution.jobId} · {snapshot.planState.acceptedExecution.profile}</p>}
+              </div>
             </div>}
 
             {/* 3 Alternative Cards */}
@@ -944,6 +952,7 @@ export function AdminPage() {
                 const hasData = Boolean(proposal);
                 const onTimeVal = hasData ? proposal!.content.metrics.onTimeRate : null;
                 const child = comparison?.jobs.find(row => row.profile === profile);
+                const nativeMetrics = backend ? comparisonMetrics(comparison, profile, backend.basis) : null;
 
                 return (
                   <article
@@ -978,7 +987,16 @@ export function AdminPage() {
                     </div>}
 
                     {/* 2×2 Metrics grid (Stitch style) */}
-                    <div className="alt-metrics-grid">
+                    {backend ? <>
+                      <div className="alt-metrics-grid" data-metric-scope="FORECAST_ONLY">
+                        <div className="alt-metric-item">Fleet travel: <strong className="alt-metric-val">{nativeMetrics ? formatMetric(nativeMetrics, "total_travel_time_s", "min") : "—"}</strong></div>
+                        <div className="alt-metric-item">Route cost: <strong className="alt-metric-val">{nativeMetrics ? formatMetric(nativeMetrics, "total_cost_vnd") : "—"}</strong></div>
+                        <div className="alt-metric-item">On-time rate: <strong className="alt-metric-val">—</strong></div>
+                        <div className="alt-metric-item">Exposure proxy: <strong className="alt-metric-val">{nativeMetrics ? formatMetric(nativeMetrics, "total_exposure") : "—"}</strong></div>
+                      </div>
+                      <p className="di-hint-text">MEMBER3_HTTP · FORECAST_ONLY · {profile}{nativeMetrics ? ` · Distance ${formatMetric(nativeMetrics, "total_distance_m", "km")}` : " · Metrics unavailable"}</p>
+                      <p className="di-hint-text">Fuel cost: —</p>
+                    </> : <div className="alt-metrics-grid">
                       <div className="alt-metric-item">
                         {isOffline(proposal?.content) ? "Fleet travel:" : "ETA:"} <strong className="alt-metric-val">
                           {hasData ? `${proposal!.content.metrics.durationMinutes} min` : "—"}
@@ -1000,7 +1018,7 @@ export function AdminPage() {
                           {proposal ? exposureText(proposal.content) : "—"}
                         </strong>
                       </div>
-                    </div>
+                    </div>}
 
                     {/* Select Alternative button */}
                     <button

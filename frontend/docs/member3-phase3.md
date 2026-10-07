@@ -1,0 +1,15 @@
+# Member 3 Phase 3 — independent map and KPI work
+
+Full Phase 3 remains **pending the public forecast contract** described in [the gate note](member3-forecast-contract.md). Select, Accept, events and replay still return `PHASE_NOT_SUPPORTED`; the default factory remains mock.
+
+`metricsAdapter.ts` keeps `FORECAST_ONLY`, `OBSERVED_PREFIX_ONLY`, `PLANNED_SUFFIX` and `PROJECTED_WHOLE` separate. It never sums observed and projected metrics. Comparison cards bind to certified child jobs and the complete current basis. Missing metrics remain null/placeholders; unsupported units are unavailable. Travel seconds and distance metres are converted only under the declared M2 contract; exposure remains an unscaled proxy. Route cost is labelled route cost, fuel and on-time values remain unavailable. Canonical observed `_us` strings retain their exact source representation; numeric formatting is for display only.
+
+The units come from the handed-off `optimization/runtime/trajectory_contract.py`, `execution.py`, `execution_validation.py` and `facade.py`: forecast `total_distance_m`, `total_travel_time_s`, `total_exposure`, `total_cost_vnd`, `total_soft_lateness_s`; observed `distance_m`, `relative_exposure_proxy`, `cost_vnd`, `travel_time_us`, `waiting_time_us`, `service_time_us`.
+
+`adaptAcceptedExecution` reads only public accepted trajectory data from a coherent M3 world read. It retains each EDGE polyline's full directed coordinates, source edge identity, action index and fractions. Missing/invalid geometry and job/vehicle/service bindings fail closed. Null accepted trajectory produces no route. Completed geometry requires a real supplied simulated observation timestamp and uses exact microsecond comparisons. Return-only continuation is retained, and unserved reasons are preserved. Admin visibility and vehicle colours apply; Driver receives only its vehicle's accepted geometry. Leaflet's existing tile-error handling leaves supplied geometry visible.
+
+Native accepted geometry is stored separately in `planState.acceptedExecution`. Legacy mock plan fields cannot accurately represent the public trajectory without inventing metrics, stops or acceptance timestamps. Backend cards use scoped metrics under `snapshot.backend`, with source/session/job/profile/basis/build provenance. Legacy mock/offline models, geometry and UI behavior are preserved. Driver stop operations remain a Phase 6 task.
+
+TDD: adapter and UI tests were run RED before implementation, then GREEN. Additional RED tests verified invalid EDGE nodes/incoming identities and prevented completion beyond the last observation. The full suite and publication checks are recorded in the Phase 3 verification receipt. Accepted geometry tests use test-only public-contract examples; they are not a new native Accept/replay run.
+
+The separate `phase3-scopes-browser.mjs` harness reuses an existing owned S1 comparison through public GET reads. It checks native values against rendered cards, null observed values, same-session refresh and unchanged world. It cannot claim full Phase 3 acceptance and does not run Optimize or Accept.

@@ -2,6 +2,8 @@ import { finite, list, point, record, string, stringList } from "../member2/vali
 import type { DispatchSnapshot } from "../../shared/types/dispatch";
 import type { Location, Order, ScenarioId, Vehicle } from "../../shared/types/scenario";
 import { Member3Error } from "./errors";
+import { adaptAcceptedExecution } from "./executionViewAdapter";
+import { executionMetrics } from "./metricsAdapter";
 import type { M3Basis, M3ExecutionView, M3LocationsView, M3OrdersView, M3Session, M3VehiclesView } from "./types";
 
 function timestamp(value: unknown): string {
@@ -130,9 +132,8 @@ export function mapM3World(session: M3Session, state: M3ExecutionView, ordersVie
       // The legacy numeric version belongs to mock mode only. Backend revision and
       // proposal/job binding must use the complete string-valued backend.basis.
       decisionState: { sessionId: session.session_id, scenarioId: session.scenario_id as ScenarioId, version: 0, orders, vehicles, locations, context: { rain: null }, events: [] },
-      planState: { acceptedPlans: [], activeAcceptedPlanId: null, proposedAlternatives: [], selectedAlternativeId: null, operationalPlanAssessment: null },
-      executionState: { activePlanId: null, progressByPlanId: {} }, demoClock: { now: parsed.currentTime, label: "Thời gian demo" }, demo: { availableEvents: [] },
-      backend: { source: "MEMBER3_HTTP", baseUrl, basis, executionMode: state.execution_mode, realWorldObservation: false, executionView: state }
+      ...adaptAcceptedExecution(state), demoClock: { now: parsed.currentTime, label: "Thời gian demo" }, demo: { availableEvents: [] },
+      backend: { source: "MEMBER3_HTTP", baseUrl, basis, executionMode: state.execution_mode, realWorldObservation: false, executionView: state, metrics: executionMetrics(state) }
     };
   } catch (error) {
     if (error instanceof Member3Error) throw error;

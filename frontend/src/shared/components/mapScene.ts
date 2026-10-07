@@ -12,6 +12,12 @@ export interface MapSegment {
   /** Shared presentation metadata; never changes route geometry. */
   legId?: string;
   color?: string;
+  edgeId?: string;
+  actionIndex?: number;
+  fractionStart?: number;
+  fractionEnd?: number;
+  fractionStartExact?: string;
+  returnToDepot?: boolean;
 }
 
 export interface MapMarker {
@@ -33,7 +39,7 @@ export interface MapScene {
 
 export function createMapScene(snapshot: DispatchSnapshot, proposed?: ProposedAlternative, vehicleId?: string): MapScene {
   const active = snapshot.planState.acceptedPlans.find((plan) => plan.id === snapshot.planState.activeAcceptedPlanId);
-  const accepted = active?.plan.vehiclePlans.filter((vehicle) => !vehicleId || vehicle.vehicleId === vehicleId).flatMap((vehicle) => {
+  const accepted = snapshot.backend ? snapshot.planState.acceptedExecution?.segments.filter(segment => !vehicleId || segment.vehicleId === vehicleId) ?? [] : active?.plan.vehiclePlans.filter((vehicle) => !vehicleId || vehicle.vehicleId === vehicleId).flatMap((vehicle) => {
     const completed = new Set(snapshot.executionState.progressByPlanId[active.id]?.[vehicle.vehicleId]?.completedSegmentIds ?? []);
     return vehicle.routeSegments.map((segment) => ({
       id: segment.id,
@@ -43,7 +49,7 @@ export function createMapScene(snapshot: DispatchSnapshot, proposed?: ProposedAl
       geometrySource: segment.geometrySource ?? "SCHEMATIC_DEMO"
     }));
   }) ?? [];
-  const preview = vehicleId ? [] : proposed?.content.vehiclePlans.flatMap((vehicle) => vehicle.routeSegments.map((segment) => ({
+  const preview = vehicleId || snapshot.backend ? [] : proposed?.content.vehiclePlans.flatMap((vehicle) => vehicle.routeSegments.map((segment) => ({
     id: segment.id,
     vehicleId: vehicle.vehicleId,
     coordinates: segment.geometry.coordinates,

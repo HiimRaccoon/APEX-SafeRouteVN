@@ -47,7 +47,7 @@ export interface M3ExecutionView extends M3WorldView {
   pending_event_ids: string[];
   accepted_trajectory: Record<string, unknown> | null;
   active_job_id: string | null;
-  observed_metrics: Record<string, number> | null;
+  observed_metrics: Record<string, number | string> | null;
   planned_suffix_metrics: Record<string, number> | null;
   projected_whole_metrics: Record<string, number> | null;
   metric_scope: "OBSERVED_PREFIX_ONLY";

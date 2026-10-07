@@ -107,6 +107,15 @@ export interface OperationalPlanAssessment {
 }
 
 export interface PlanState {
+  /** Public M3 accepted trajectory; never populated by an unaccepted forecast. */
+  acceptedExecution?: {
+    source: "MEMBER3_HTTP";
+    jobId: string;
+    profile: PlanProfile;
+    basis: import("../../integrations/member3/types").M3Basis;
+    segments: import("../components/mapScene").MapSegment[];
+    unserved: { orderId: string; reason: string }[];
+  } | null;
   acceptedPlans: AcceptedPlanRecord[];
   activeAcceptedPlanId: string | null;
   proposedAlternatives: ProposedAlternative[];
@@ -141,6 +150,7 @@ export interface DispatchSnapshot {
     /** Server identity/revision. Bind backend proposals/jobs to every field, including string head_version and generation. */
     basis: import("../../integrations/member3/types").M3Basis;
     executionView: import("../../integrations/member3/types").M3ExecutionView;
+    metrics?: ReturnType<typeof import("../../integrations/member3/metricsAdapter").executionMetrics>;
     scenarios?: import("../../integrations/member3/scenarioAdapter").ScenarioOption[];
     comparison?: import("../../integrations/member3/types").M3ComparisonView;
     jobs?: Record<string, import("../../integrations/member3/types").M3JobView>;
