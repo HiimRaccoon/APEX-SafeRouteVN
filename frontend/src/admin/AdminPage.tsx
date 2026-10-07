@@ -118,6 +118,7 @@ export function AdminPage() {
   const active = snapshot.planState.acceptedPlans.find(
     (plan) => plan.id === snapshot.planState.activeAcceptedPlanId
   );
+  const hasAcceptedPlan = backend ? Boolean(snapshot.planState.acceptedExecution) : Boolean(active);
   const assessment = snapshot.planState.operationalPlanAssessment;
   const routeVisibility = routeView.sessionId === snapshot.decisionState.sessionId ? routeView.visibility : {};
   const adminMap = createAdminMapPresentation(snapshot, selected, Object.keys(routeVisibility).filter((id) => routeVisibility[id]));
@@ -134,7 +135,9 @@ export function AdminPage() {
   const currentCapacities = snapshot.decisionState.vehicles.map((vehicle) => capacities[vehicle.id] ?? vehicle.capacityKg);
   const totalCapacity = currentCapacities.reduce((sum, capacity) => sum + capacity, 0);
   const totalOrdersCount = snapshot.decisionState.orders.length;
-  const optimizedOrdersCount = active ? totalOrdersCount - active.plan.unserved.length : 0;
+  const optimizedOrdersCount = backend
+    ? hasAcceptedPlan ? backend.executionView.delivered_prefix.length + backend.executionView.planned_served_suffix.length : 0
+    : active ? totalOrdersCount - active.plan.unserved.length : 0;
   const hasProposals = snapshot.planState.proposedAlternatives.length > 0;
   const roundEventId = snapshot.demo.roundEventId ?? snapshot.demo.availableEvents.find((event) => event.status !== "READY_TO_TRIGGER")?.id;
   const eventRoundUsed = Boolean(roundEventId);
@@ -216,7 +219,7 @@ export function AdminPage() {
           <div className="dispatch-status-badge">
             <span className="live-dot pulse" />
             <span className="status-title">
-              {active ? L.statusAfterOptimize : L.statusBeforeOptimize}
+              {hasAcceptedPlan ? L.statusAfterOptimize : L.statusBeforeOptimize}
             </span>
           </div>
 
@@ -1084,7 +1087,7 @@ export function AdminPage() {
                 <Check size={16} strokeWidth={2.5} />
                 <span>{L.acceptSelectedPlan}</span>
               </button>
-            ) : !active ? (
+            ) : !hasAcceptedPlan ? (
               <p className="di-hint-text">Click Optimize to generate plans</p>
             ) : null}
 

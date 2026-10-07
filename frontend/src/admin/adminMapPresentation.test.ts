@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { MockStateEngine } from "../mocks/engine/MockStateEngine";
 import { createAdminMapPresentation } from "./adminMapPresentation";
+import { acceptedView } from "../integrations/member3/acceptedTestFixture";
+import { adaptAcceptedExecution } from "../integrations/member3/executionViewAdapter";
+import { basis } from "../integrations/member3/testFixtures";
+import type { MapSegment } from "../shared/components/mapScene";
 
 function acceptedS0() {
   const engine = new MockStateEngine();
@@ -10,6 +14,25 @@ function acceptedS0() {
 }
 
 describe("Admin map display preferences and operational legs", () => {
+  it("keeps native leg numbers per vehicle stable when other routes are hidden", () => {
+    const snapshot = acceptedS0().snapshot;
+    const view = acceptedView();
+    Object.assign(snapshot, adaptAcceptedExecution(view));
+    snapshot.backend = { source: "MEMBER3_HTTP", baseUrl: "http://localhost:8000", executionMode: "SIMULATED_REPLAY", realWorldObservation: false, basis, executionView: view };
+    const edge = snapshot.planState.acceptedExecution!.segments[0];
+    snapshot.planState.acceptedExecution!.segments = [
+      { ...edge, id: "V1-edge-1", legId: "V1:leg:1" },
+      { ...edge, id: "V1-edge-2", legId: "V1:leg:2" },
+      { ...edge, id: "V2-edge-3", vehicleId: "V2", legId: "V2:leg:3" }
+    ] satisfies MapSegment[];
+    const before = structuredClone(snapshot);
+    const both = createAdminMapPresentation(snapshot, undefined, ["V1", "V2"]);
+    const onlyV2 = createAdminMapPresentation(snapshot, undefined, ["V2"]);
+    expect(onlyV2.legs).toEqual(both.legs.filter(l => l.vehicleId === "V2"));
+    expect(onlyV2.legs[0].number).toBe(3);
+    expect(both.legs.filter(l => l.vehicleId === "V1").map(l => l.number)).toEqual([1, 2]);
+    expect(snapshot).toEqual(before);
+  });
   it.each([{ ids: [] }, { ids: ["V1"] }, { ids: ["V2"] }, { ids: ["V1", "V2"] }])("shows only explicitly enabled vehicle routes: $ids", ({ ids }) => {
     const { snapshot } = acceptedS0();
     const before = structuredClone(snapshot);

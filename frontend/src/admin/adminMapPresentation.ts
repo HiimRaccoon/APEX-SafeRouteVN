@@ -24,13 +24,20 @@ export function createAdminMapPresentation(
     const base = createMapScene(snapshot);
     const segments = base.accepted.filter(s => visibleVehicleIds.includes(s.vehicleId));
     const byLeg = new Map<string, AdminRouteLeg>();
-    for (const segment of segments) {
+    const countByVehicle = new Map<string, number>();
+    for (const segment of base.accepted) {
       const id = segment.legId ?? segment.id;
-      if (!byLeg.has(id)) byLeg.set(id, { id, vehicleId: segment.vehicleId, number: byLeg.size + 1,
-        targetLabel: segment.returnToDepot ? "Mandatory return continuation" : "Planned service", color: segment.color ?? adminVehicleColor(segment.vehicleId) });
+      if (!byLeg.has(id)) {
+        const next = (countByVehicle.get(segment.vehicleId) ?? 0) + 1;
+        const ordinal = /:leg:([1-9]\d*)$/.exec(id)?.[1];
+        const number = ordinal && Number.isSafeInteger(Number(ordinal)) ? Number(ordinal) : next;
+        countByVehicle.set(segment.vehicleId, number);
+        byLeg.set(id, { id, vehicleId: segment.vehicleId, number,
+          targetLabel: segment.returnToDepot ? "Mandatory return continuation" : "Planned service", color: segment.color ?? adminVehicleColor(segment.vehicleId) });
+      }
     }
     return { scene: { ...base, accepted: segments, proposed: [], vehicleColors: Object.fromEntries(snapshot.decisionState.vehicles.map(v => [v.id, adminVehicleColor(v.id)])) },
-      legs: [...byLeg.values()], source: accepted ? "ACCEPTED" : null, completionAvailable: false };
+      legs: [...byLeg.values()].filter(leg => visibleVehicleIds.includes(leg.vehicleId)), source: accepted ? "ACCEPTED" : null, completionAvailable: false };
   }
   const active = snapshot.planState.acceptedPlans.find((p) => p.id === snapshot.planState.activeAcceptedPlanId);
   const validSelected = selected && snapshot.planState.selectedAlternativeId === selected.id &&

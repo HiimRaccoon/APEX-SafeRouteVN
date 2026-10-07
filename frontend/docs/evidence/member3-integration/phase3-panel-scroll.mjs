@@ -1,4 +1,5 @@
-// Browser interaction regression: long native provenance/cards must leave controls reachable.
+// CSS/browser interaction regression using synthetic HTML and real app CSS.
+// This does not run the native app or M3 and is not native acceptance evidence.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import puppeteer from "puppeteer-core";

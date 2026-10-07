@@ -9,6 +9,7 @@ import type { DispatchSnapshot } from "../shared/types/dispatch";
 import type { M3ComparisonView, M3ExecutionView } from "../integrations/member3/types";
 import { acceptedView } from "../integrations/member3/acceptedTestFixture";
 import { adaptAcceptedExecution } from "../integrations/member3/executionViewAdapter";
+import { LABELS as L } from "./admin.labels";
 
 class BackendView extends MockDispatchApi {
   constructor(private stale: boolean, private running: boolean, private metrics = false, private accepted = false) { super(); }
@@ -22,7 +23,15 @@ class BackendView extends MockDispatchApi {
       basis, executionView: { observed_metrics: null, planned_suffix_metrics: null, projected_whole_metrics: null } as M3ExecutionView, comparison: c, capabilities: phase2Capabilities(!this.stale), stale: this.stale,
       error: this.stale ? { code: "UNAUTHORIZED", message: "Token expired" } : undefined,
       scenarios: [{ id: "S0", orderCount: 17, vehicleCount: 4, initialTime: "2026-09-27T21:00:00+07:00", fixtureSha256: "a".repeat(64) }] };
-    if (this.accepted) Object.assign(s, adaptAcceptedExecution(acceptedView()));
+    if (this.accepted) {
+      const view = acceptedView();
+      view.order_ids.push("O0", "O2"); view.delivered_prefix = ["O0"]; view.planned_served_suffix = ["O2"];
+      const route = (view.accepted_trajectory!.vehicle_routes as Array<{ order_sequence: string[]; actions: Record<string, unknown>[] }>)[0];
+      route.order_sequence = ["O2"];
+      route.actions.push({ kind: "SERVICE", start_us: "2000000", end_us: "2000000", order_id: "O2", node_id: 2, load_after_kg: 0 });
+      s.backend.executionView = view;
+      Object.assign(s, adaptAcceptedExecution(view));
+    }
     return s;
   }
 }
@@ -43,6 +52,18 @@ it("truthfully labels a native accepted Driver route while stop operations remai
 it("labels native accepted geometry completion unavailable on Admin", async () => {
   render(<MemoryRouter initialEntries={["/admin"]}><App api={new BackendView(false, false, false, true)} /></MemoryRouter>);
   expect(await screen.findByText("Accepted route · Completion unavailable")).toBeInTheDocument();
+});
+it("uses native accepted execution for Admin status and public prefix/suffix coverage", async () => {
+  render(<MemoryRouter initialEntries={["/admin"]}><App api={new BackendView(false, false, false, true)} /></MemoryRouter>);
+  expect(await screen.findByText(L.statusAfterOptimize)).toBeInTheDocument();
+  expect(screen.queryByText(L.statusBeforeOptimize)).not.toBeInTheDocument();
+  expect(screen.getByText("2 optimized")).toBeInTheDocument();
+  expect(screen.queryByText("Click Optimize to generate plans")).not.toBeInTheDocument();
+});
+it("does not infer accepted coverage from a completed comparison", async () => {
+  render(<MemoryRouter initialEntries={["/admin"]}><App api={new BackendView(false, false)} /></MemoryRouter>);
+  expect(await screen.findByText(L.statusBeforeOptimize)).toBeInTheDocument();
+  expect(screen.getByText("0 optimized")).toBeInTheDocument();
 });
 it("renders native forecast units and provenance without inventing fuel or observed KPIs", async () => {
   render(<MemoryRouter initialEntries={["/admin"]}><App api={new BackendView(false, false, true)} /></MemoryRouter>);
