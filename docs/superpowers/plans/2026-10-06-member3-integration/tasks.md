@@ -1,6 +1,6 @@
 # SafeRoute VN — Member 3 Integration Tasks
 
-**Cập nhật:** 2026-10-07. Đọc [spec.md](spec.md) và [plan.md](plan.md) trước thực hiện. Chỉ có **7 phase lớn**, task IDs bên trong là checklist triển khai.
+**Cập nhật:** 2026-10-08. Đọc [spec.md](spec.md) và [plan.md](plan.md) trước thực hiện. Chỉ có **7 phase lớn**, task IDs bên trong là checklist triển khai.
 
 `[x]` = implementation + evidence hiện có; `[ ]` = chưa làm hoặc chưa nghiệm thu. Ghi BLOCKED chỉ trên task có phụ thuộc cụ thể; không coi mọi migration bị chặn khi còn việc độc lập. Tracker này dành cho M3 migration, không đổi trạng thái lịch sử mock Phase 1/1.5 trong `frontend/docs/tasks.md`.
 
@@ -9,7 +9,7 @@
 | 1 — Foundation | Load/read S1 native đã PASS | Baseline tests khi bắt đầu Phase 2; không làm lại code Foundation. |
 | 2 — Optimize | PASS native S1, 196 tests; 2026-10-07 | String revision + real comparison + lifecycle/polling/error gate. |
 | 3 — Map + KPI | PASS native S1, extension 0.9.0; 234 frontend tests | Certified forecast + accepted geometry + non-null scopes, read-only map/reload/Driver gate PASS. |
-| 4 — Select + Accept | Chưa triển khai | Local Select + certified current-basis Accept + server state. |
+| 4 — Select + Accept | PASS native S1 r2; 260 tests, review fixes verified | Local Select + certified current-basis Accept + server state. |
 | 5 — Event + Re-optimization | Chưa triển khai | Native S2/S3/S4 barrier/apply/re-optimize đúng. |
 | 6 — Driver Execution / Replay | Chưa triển khai | Backend accepted Driver/replay controls + server session cross-tab. |
 | 7 — Cutover + Cleanup + E2E | Chưa triển khai | E2E trước/sau cleanup, backend default/import graph sạch, mock lightweight chạy. |
@@ -104,19 +104,19 @@ Progress 2026-10-07: user-authorized public forecast extension M3 0.9.0 implemen
 
 **Dependencies:** P2/P3. **Files:** BackendDispatchApi/shared proposal registry, revision tests, AdminPage/adminMapPresentation and UI tests. **Consumes:** ProposalOrigin/job validation/current basis. **Produces:** existing `selectAlternative(planId)` local semantics, centralized isAcceptableJob/currency.
 
-- [ ] Test `select_is_ui_only`: selection switch không POST/no world write/no delivered/custody change; preserve accepted map/view independently.
-- [ ] Test `accept_guard_checks_full_basis_and_witness`: same head/different generation hoặc hashes STALE; QUEUED/FAILED/no witness/invalid validation/no plan disable; current COMPLETED certified plan enable only khi fresh/no pending mutation.
-- [ ] FAIL → implement selection/guards; targeted PASS + typecheck/build; browser record zero POST Select và active accepted unchanged.
+- [x] Test `select_is_ui_only`: selection switch không POST/no world write/no delivered/custody change; preserve accepted map/view independently.
+- [x] Test `accept_guard_checks_full_basis_and_witness`: same head/different generation hoặc hashes STALE; QUEUED/FAILED/no witness/invalid validation/no plan disable; current COMPLETED certified plan enable only khi fresh/no pending mutation.
+- [x] FAIL → implement selection/guards; targeted PASS + typecheck/build; browser record zero POST Select và active accepted unchanged.
 
 ### P4-02 — Server Accept, receipt reconciliation và fresh state
 
 **Dependencies:** P4-01. **Files:** client/types/errors/BackendDispatchApi/requestId, execution adapter, Admin/Driver consumers and API/UI tests; extend browser harness. **Consumes:** selected job ID/PendingCommandStore/expectedRevision. **Produces:** acceptSelectedPlan real operation, server accepted record/current trajectory.
 
-- [ ] Test POST `/jobs/{selectedJobId}/accept` with strings + request_id; successful response followed by consistent fresh world, no local generation++/clone selected plan into physical authority.
-- [ ] Test `lost_accept_response_retries_without_double_accept`: same body/ID after refresh; historical receipt basis may differ from fresh state, current active route not rewound. 409 stale refresh/re-optimize, no automatic new Accept.
-- [ ] Test GET acceptances history rehydrate confirmed records only, active accepted job/trajectory vẫn từ fresh state; thiếu historical geometry giữ record metadata, không clone current route thành lịch sử.
-- [ ] FAIL → implement accept and pending reconciliation; targeted/full tests/typecheck/build PASS.
-- [ ] Native Phase 4 S1 gate: correct job accepted, server generation returned, accepted geometry mapped, zero orders DELIVERED merely due Accept; stale two-tab race rejected and refreshed.
+- [x] Test POST `/jobs/{selectedJobId}/accept` with strings + request_id; successful response followed by consistent fresh world, no local generation++/clone selected plan into physical authority.
+- [x] Test `lost_accept_response_retries_without_double_accept`: same body/ID after refresh; historical receipt basis may differ from fresh state, current active route not rewound. 409 stale refresh/re-optimize, no automatic new Accept.
+- [x] Test GET acceptances history rehydrate confirmed records only, active accepted job/trajectory vẫn từ fresh state; thiếu historical geometry giữ record metadata, không clone current route thành lịch sử.
+- [x] FAIL → implement accept and pending reconciliation; targeted/full tests/typecheck/build PASS.
+- [x] Native Phase 4 S1 gate: correct job accepted, server generation returned, accepted geometry mapped, zero orders DELIVERED merely due Accept; stale two-tab race rejected and refreshed.
 
 ## Phase 5 — Event + Re-optimization
 
@@ -203,7 +203,8 @@ Progress 2026-10-07: user-authorized public forecast extension M3 0.9.0 implemen
 | Foundation native S1 | Existing [browser receipt](../../../../frontend/docs/evidence/m3-phase1-browser-results.json), [HTTP](../../../../frontend/docs/evidence/m3-phase1-http-responses.json), [verification](../../../../frontend/docs/evidence/m3-phase1-verification.json). |
 | Phase 2 | [Native S1](../../../../frontend/docs/evidence/member3-integration/phase2-latest.json), [verification](../../../../frontend/docs/evidence/member3-integration/verification.json), [review fixes](../../../../frontend/docs/evidence/member3-integration/review.md). 196 tests/typecheck/build PASS; comparison COMPARABLE, physical world unchanged. |
 | Phase 3 | [Native browser/map/scopes](../../../../frontend/docs/evidence/member3-integration/phase3-forecast-browser-native.json), [HTTP/read-only](../../../../frontend/docs/evidence/member3-integration/phase3-forecast-http-native.json), [explicit scopes](../../../../frontend/docs/evidence/member3-integration/phase3-forecast-scopes-http-native.json), [verification](../../../../frontend/docs/evidence/member3-integration/phase3-forecast-verification.json) PASS. 234 frontend/54 SDK/875 backend tests; typecheck/build PASS. |
-| Phase 4–6 | Chưa triển khai; local preview does not connect operational Accept/Event/Replay. |
+| Phase 4 | P4-01/P4-02 PASS; [implementation and receipts](../../../../frontend/docs/member3-phase4.md). |
+| Phase 5–6 | Chưa triển khai; Event/Replay controls and cross-tab convergence remain deferred. |
 | Forecast public contract | User-authorized [0.9.0 extension](../../../M3_FORECAST_API_HANDOFF_20261007.md), separate sealed build/receipts from received 0.8.0. |
 | Pre-cleanup E2E / post-cleanup E2E | Chưa chạy; hai receipts riêng bắt buộc, không dùng Foundation receipt thay. |
 | Artifact/import/secret audit | Chưa chạy cho migration đầy đủ; cần backend production build thực tế P7. |

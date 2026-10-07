@@ -1,6 +1,8 @@
 import { Member3Error } from "./errors";
 import { parseComparisonReceipt, parseComparisonView, parseJobView } from "./jobViewAdapter";
 import { parseJobForecast } from "./forecastViewAdapter";
+import { parseAcceptanceView, parseAcceptanceAudit } from "./acceptance";
+import type { AcceptPlanRequest, M3Session } from "./types";
 import type { CompareProfilesRequest, M3ComparisonCancellation } from "./types";
 import type { M3Capabilities, M3Catalog, M3Envelope, M3ExecutionView, M3LoadedSession, M3LocationsView, M3OrdersView, M3Ready, M3VehiclesView } from "./types";
 
@@ -30,6 +32,7 @@ export class Member3Client {
   ready() { return this.request<M3Ready>("/ready", false); }
   capabilities() { return this.request<M3Capabilities>("/api/runtime/capabilities"); }
   scenarios() { return this.request<M3Catalog>("/api/scenarios"); }
+  session(id: string) { return this.request<M3Session>(`/api/sessions/${encodeURIComponent(id)}`); }
   loadScenario(id: string, requestId: string) {
     return this.request<M3LoadedSession>(`/api/scenarios/${encodeURIComponent(id)}/load`, true, { request_id: requestId });
   }
@@ -62,6 +65,12 @@ export class Member3Client {
     return receipt;
   }
 
+  async accept(sid: string, jid: string, body: AcceptPlanRequest) {
+    return parseAcceptanceView(await this.request(`/api/sessions/${encodeURIComponent(sid)}/jobs/${encodeURIComponent(jid)}/accept`, true, body), sid, jid);
+  }
+  async acceptances(sid: string, signal?: AbortSignal) {
+    return parseAcceptanceAudit(await this.request(`/api/sessions/${encodeURIComponent(sid)}/acceptances`, true, undefined, signal), sid);
+  }
   private async request<T>(path: string, authenticated = true, body?: { request_id: string }, signal?: AbortSignal): Promise<T> {
     const token = authenticated ? this.token()?.trim() : null;
     if (authenticated && !token) throw new Member3Error("AUTH_REQUIRED", "M3 bearer token required. Configure the token for this browser session.");

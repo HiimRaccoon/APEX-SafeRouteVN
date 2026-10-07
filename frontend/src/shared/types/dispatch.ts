@@ -165,6 +165,9 @@ export interface DispatchSnapshot {
     jobs?: Record<string, import("../../integrations/member3/types").M3JobView>;
     capabilities?: import("../../integrations/member3/capabilities").DispatchCapabilities;
     stale?: boolean;
+    mutationPending?: boolean;
+    /** Confirmed historical metadata; active geometry comes from executionView. */
+    acceptances?: import("../../integrations/member3/types").M3AcceptanceReceipt[];
     error?: { code: string; message: string };
   };
   decisionState: DecisionState;

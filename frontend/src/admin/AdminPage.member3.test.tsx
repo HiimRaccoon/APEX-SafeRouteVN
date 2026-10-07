@@ -15,6 +15,9 @@ import { adaptJobForecast, parseJobForecast } from "../integrations/member3/fore
 import userEvent from "@testing-library/user-event";
 
 class BackendView extends MockDispatchApi {
+  acceptEnabled = false;
+  mutationPending = false;
+  invalidWitness = false;
   private previewSelection: string | null = null;
   constructor(private stale: boolean, private running: boolean, private metrics = false, private accepted = false, private preview = false) { super(); }
   override async selectAlternative(id: string) { this.previewSelection = id; return this.getSnapshot(); }
@@ -40,10 +43,28 @@ class BackendView extends MockDispatchApi {
     if (this.preview) {
       s.planState.proposedAlternatives = [adaptJobForecast(parseJobForecast(forecastView()), { basis, jobId: "job-return", profile: "SAFER", comparisonId: c.comparison_id, vehicleIds: ["V1"], deliveredPrefix: [] })!];
       s.planState.selectedAlternativeId = this.previewSelection;
+      const job = s.planState.proposedAlternatives[0].nativeForecast!.jobView;
+      s.backend.jobs = { [job.job_id]: this.invalidWitness ? { ...job, validation: { status: "NOT_RUN", valid: null } } : job };
+      c.jobs[2] = { profile: "SAFER", job_id: job.job_id, view: job };
     }
+    s.backend.capabilities!.accept = this.acceptEnabled;
+    s.backend.mutationPending = this.mutationPending;
     return s;
   }
 }
+it("enables Accept only for a selected current certified job and blocks pending or invalid jobs", async () => {
+  const api = new BackendView(false, false, false, true, true); api.acceptEnabled = true;
+  const user = userEvent.setup();
+  render(<MemoryRouter initialEntries={["/admin"]}><App api={api} /></MemoryRouter>);
+  await user.click(await screen.findByRole("button", { name: "Select SAFER" }));
+  expect(screen.getByRole("button", { name: "Accept selected plan" })).toBeEnabled();
+  api.mutationPending = true;
+  await user.click(screen.getByRole("button", { name: "Refresh backend" }));
+  expect(screen.getByRole("button", { name: "Accept selected plan" })).toBeDisabled();
+  api.mutationPending = false; api.invalidWitness = true;
+  await user.click(screen.getByRole("button", { name: "Refresh backend" }));
+  expect(screen.getByRole("button", { name: "Accept selected plan" })).toBeDisabled();
+});
 it("lets Admin select a certified public preview while Accept stays unsupported", async () => {
   const user = userEvent.setup();
   render(<MemoryRouter initialEntries={["/admin"]}><App api={new BackendView(false, false, false, false, true)} /></MemoryRouter>);

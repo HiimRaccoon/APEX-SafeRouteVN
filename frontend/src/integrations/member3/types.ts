@@ -84,6 +84,14 @@ export interface M3Catalog {
 export interface M3Capabilities { schema_version: "task02-m2-runtime-capabilities/1"; build_sha256: string; [key: string]: unknown }
 export interface M3Ready { ready: boolean; checks: Record<string, string>; execution_mode: "SIMULATED_REPLAY" }
 
+export interface AcceptPlanRequest { request_id: string; expected_revision: { head_version: string; generation: string } }
+export interface M3AcceptanceReceipt {
+  schema_version: "saferoute-m3-plan-acceptance/1";
+  acceptance_id: string; session_id: string; job_id: string; status: "ACCEPTED";
+  input_basis: M3Basis; basis: M3Basis; recorded_at: string; links: { state: string; job: string };
+}
+export interface M3AcceptanceView { schema_version: "saferoute-m3-acceptance-view/1"; receipt: M3AcceptanceReceipt; execution_view: M3ExecutionView }
+export interface M3AcceptanceAudit { schema_version: "saferoute-m3-acceptance-audit/1"; session_id: string; acceptances: M3AcceptanceReceipt[] }
 export type M3JobStatus = "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED";
 export type ComparisonStatus = "QUEUED" | "RUNNING" | "CANCEL_REQUESTED" | "COMPLETED" | "FAILED" | "CANCELLED";
 export interface M3JobView {

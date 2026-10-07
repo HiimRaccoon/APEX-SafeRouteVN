@@ -23,7 +23,7 @@ import { useDispatch } from "../app/DispatchContext";
 import { getCustomerInfo, getDriverInfo } from "../mocks/presentation";
 import { LABELS as L } from "./admin.labels";
 import { terminalComparison, comparisonCanRank } from "../integrations/member3/jobViewAdapter";
-import { sameBasis, proposalCurrency } from "../integrations/member3/revision";
+import { sameBasis, proposalCurrency, canAcceptSelectedPlan } from "../integrations/member3/revision";
 import { comparisonMetrics, executionMetrics, formatMetric } from "../integrations/member3/metricsAdapter";
 
 const profiles: PlanProfile[] = ["FASTEST", "BALANCED", "SAFER"];
@@ -116,6 +116,7 @@ export function AdminPage() {
     (plan) => plan.id === snapshot.planState.selectedAlternativeId
   );
   const selectedPlan = selected?.content;
+  const acceptDisabled = pending || !canAcceptSelectedPlan(snapshot);
   const active = snapshot.planState.acceptedPlans.find(
     (plan) => plan.id === snapshot.planState.activeAcceptedPlanId
   );
@@ -648,7 +649,7 @@ export function AdminPage() {
                 <button
                   className="cta-btn cta-accept"
                   aria-label={L.acceptSelectedPlan}
-                  disabled={!selected || phaseControlsDisabled || proposalCurrency(selected, snapshot) === "STALE"}
+                  disabled={acceptDisabled}
                   onClick={() => void invoke(() => api.acceptSelectedPlan())}
                 >
                   <Check size={14} strokeWidth={2} />
@@ -1084,7 +1085,7 @@ export function AdminPage() {
               <button
                 className="accept-fullwidth"
                 aria-label="Accept selected plan"
-                disabled={!selected || phaseControlsDisabled || proposalCurrency(selected, snapshot) === "STALE"}
+                disabled={acceptDisabled}
                 onClick={() => void invoke(() => api.acceptSelectedPlan())}
               >
                 <Check size={16} strokeWidth={2.5} />

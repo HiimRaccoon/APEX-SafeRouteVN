@@ -5,6 +5,11 @@ import puppeteer from "puppeteer-core";
 const args = process.argv.slice(2);
 const option = (name, fallback) => { const i = args.indexOf(name); return i < 0 ? fallback : args[i + 1]; };
 const phase = option("--phase", "2"), scenario = option("--scenario", "S1");
+if (phase === "4" && !args.includes("--all")) {
+  assert.equal(scenario, "S1", "Phase 4 native gate currently covers S1 only");
+  await import("./phase4-browser.mjs");
+  process.exit(0);
+}
 assert(!args.includes("--all"), "--all requires implemented Phase 3–7 gates; no full-migration acceptance is claimed by this harness.");
 assert.equal(phase, "2", "This release implements the Phase 2 gate only.");
 assert(/^S[0-4]$/.test(scenario), "Supported scenarios: S0–S4");

@@ -5,6 +5,7 @@ import { createMapScene } from "../../shared/components/mapScene";
 import type { M3Vehicle, M3Projection, M3OrdersView } from "../../integrations/member3/types";
 import { comparison } from "../../integrations/member3/testFixtures";
 import { forecastView } from "../../integrations/member3/forecastTestFixture";
+import { canAcceptSelectedPlan } from "../../integrations/member3/revision";
 
 // Contract-shaped HTTP data, deliberately unrelated to frontend fixture IDs/coordinates.
 function server() {
@@ -39,6 +40,7 @@ function server() {
           scenarios: ["S0", "S1"].map((scenario_id) => ({ scenario_id, fixture_sha256: "f".repeat(64), initial_time: time, order_count: 1, vehicle_count: 1 })), catalog_sha256: "c".repeat(64) }
       : path.endsWith("/load") ? { schema_version: "saferoute-m3-loaded-session/1", session: { session_id: basis.session_id,
           scenario_id: path.split("/")[3], build_sha256: basis.build_sha256, catalog_sha256: "c".repeat(64), fixture_sha256: "f".repeat(64) }, execution_view: state }
+      : path.endsWith("/acceptances") ? { schema_version: "saferoute-m3-acceptance-audit/1", session_id: basis.session_id, acceptances: [] }
       : path.endsWith("/orders") ? orders : path.endsWith("/vehicles") ? vehicles : path.endsWith("/locations") ? locations : state;
     return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", status: "OK", request_id: "trace-1", data, diagnostics: [] }));
   };
@@ -47,6 +49,206 @@ function server() {
   const client = new Member3Client({ fetch: fetcher, token: () => "test-only-bearer" });
   return { client, storage, requests, values, state, orders, vehicles, locations, fetcher, capabilities };
 }
+
+async function acceptHarness() {
+  const s = server();
+  s.state.basis.head_version = "9007199254740993";
+  const c = comparison(); c.session_id = s.state.basis.session_id; c.input_basis = structuredClone(s.state.basis);
+  c.jobs.forEach(row => { row.view.input_basis = structuredClone(c.input_basis); row.view.served_orders = ["M3-O1"]; });
+  c.outcome.comparison.jobs.forEach(row => { row.basis = structuredClone(c.input_basis); });
+  const forecasts = c.jobs.map(row => {
+    const f = forecastView(); f.session_id = c.session_id; f.job_id = row.job_id; f.profile = row.profile;
+    f.input_basis = structuredClone(c.input_basis); f.job_view = row.view;
+    f.trajectory.job_id = row.job_id; f.trajectory.profile = row.profile;
+    const route = (f.trajectory.vehicle_routes as Array<{ vehicle_id: string; order_sequence: string[]; actions: Record<string, unknown>[] }>)[0];
+    route.vehicle_id = "M3-V1"; route.order_sequence = ["M3-O1"];
+    route.actions.push({ kind: "SERVICE", start_us: "2000000", end_us: "2000000", order_id: "M3-O1", node_id: 2, load_after_kg: 0 });
+    return f;
+  });
+  const history: Record<string, unknown>[] = [], posts: string[] = [], paths: string[] = [];
+  let loseReply = false, loseBeforeCommit = false, staleOnPost = false, holdReply: Promise<void> | undefined;
+  let rejection: { status: number; code: string } | undefined;
+  function activate(jid: string, generation: string) {
+    s.state.basis = { ...s.state.basis, generation };
+    s.orders.basis = s.vehicles.basis = s.locations.basis = s.state.basis;
+    Object.assign(s.state, { active_job_id: jid, accepted_trajectory: forecasts.find(f => f.job_id === jid)!.trajectory,
+      planned_served_suffix: ["M3-O1"], unserved: [] });
+    s.orders.orders[0].planned_in_accepted_suffix = true; s.orders.orders[0].unserved_reason = null;
+  }
+  const fetcher: typeof fetch = async (url, options) => {
+    const path = new URL(String(url)).pathname; paths.push(path);
+    let data: unknown;
+    if (path.endsWith("/accept")) {
+      posts.push(String(options!.body));
+      if (loseBeforeCommit) throw new TypeError("Unknown submit outcome");
+      if (rejection) return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", status: "ERROR", request_id: "trace", data: null,
+        diagnostics: [{ severity: "ERROR", code: rejection.code, path: "accept", message: "Definitive witness rejection; re-optimize" }] }), { status: rejection.status });
+      if (staleOnPost) {
+        activate("job-FASTEST", "1");
+        return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", status: "ERROR", request_id: "trace", data: null,
+          diagnostics: [{ severity: "ERROR", code: "STALE_HEAD", path: "job_id", message: "Re-optimize from current state" }] }), { status: 409 });
+      }
+      const jid = path.split("/").at(-2)!;
+      if (!history.length) {
+        activate(jid, "1"); history.push({ schema_version: "saferoute-m3-plan-acceptance/1", acceptance_id: "accept-1", session_id: c.session_id,
+          job_id: jid, status: "ACCEPTED", input_basis: c.input_basis, basis: structuredClone(s.state.basis), recorded_at: "2026-10-07T12:30:00+00:00",
+          links: { state: `/api/sessions/${c.session_id}/state`, job: `/api/sessions/${c.session_id}/jobs/${jid}` } });
+      }
+      if (loseReply) { loseReply = false; throw new TypeError("Reply lost after commit"); }
+      await holdReply;
+      data = { schema_version: "saferoute-m3-acceptance-view/1", receipt: history[0], execution_view: s.state };
+    } else if (path === `/api/sessions/${c.session_id}`) data = { session_id: c.session_id, scenario_id: "S1", build_sha256: c.input_basis.build_sha256, catalog_sha256: "c".repeat(64), fixture_sha256: "f".repeat(64) };
+    else if (path.endsWith("/acceptances")) data = { schema_version: "saferoute-m3-acceptance-audit/1", session_id: c.session_id, acceptances: history };
+    else if (path.includes("/profiles/comparisons/")) data = c;
+    else if (path.endsWith("/forecast")) data = forecasts.find(f => f.job_id === path.split("/").at(-2));
+    else return s.fetcher(url, options);
+    return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", status: "OK", request_id: "trace", data, diagnostics: [] }));
+  };
+  await new BackendDispatchApi({ client: s.client, storage: s.storage }).loadScenario("S1");
+  const key = [...s.values.keys()].find(k => k.includes("session.v1"))!;
+  const pointer = JSON.parse(s.values.get(key)!); pointer.comparison = { id: c.comparison_id, inputBasis: c.input_basis }; s.values.set(key, JSON.stringify(pointer));
+  const client = new Member3Client({ fetch: fetcher, token: () => "test-only-bearer" });
+  const api = new BackendDispatchApi({ client, storage: s.storage }); await api.getSnapshot();
+  return { ...s, api, client, c, history, posts, paths, activate, forecasts,
+    lose: () => { loseReply = true; }, stale: () => { staleOnPost = true; }, hold: (promise: Promise<void>) => { holdReply = promise; },
+    unknown: (value: boolean) => { loseBeforeCommit = value; }, reject: (status: number, code: string) => { rejection = { status, code }; } };
+}
+
+describe("BackendDispatchApi Phase 4", () => {
+  it("keeps distinct durable intents when tabs inherit an identical sessionStorage identity", async () => {
+    sessionStorage.setItem("saferoute.member3.command-tab.v1", "copied-tab");
+    const h = await acceptHarness(); const other = new BackendDispatchApi({ client: h.client, storage: h.storage });
+    await other.getSnapshot(); await other.selectAlternative("job-FASTEST"); await h.api.selectAlternative("job-SAFER"); h.unknown(true);
+    await expect(h.api.acceptSelectedPlan()).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+    const firstIdentity = sessionStorage.getItem("saferoute.member3.command-tab.v1")!;
+    sessionStorage.setItem("saferoute.member3.command-tab.v1", "copied-tab");
+    await expect(other.acceptSelectedPlan()).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+    const intents = () => [...h.values.entries()].filter(([key, value]) => key.includes("command.v1") && JSON.parse(value) !== null);
+    expect(intents()).toHaveLength(2);
+    sessionStorage.setItem("saferoute.member3.command-tab.v1", firstIdentity); h.unknown(false);
+    const restored = await new BackendDispatchApi({ client: h.client, storage: h.storage }).getSnapshot();
+    expect(restored.planState.acceptedExecution!.jobId).toBe("job-SAFER"); expect(h.posts[2]).toBe(h.posts[0]);
+    expect(intents()).toHaveLength(1); expect(JSON.parse(intents()[0][1]).resourceId).toBe("job-FASTEST");
+    sessionStorage.removeItem("saferoute.member3.command-tab.v1");
+  });
+  it.each(["WITNESS_INVALID", "WITNESS_REQUIRED", "JOB_STALE"])("settles definitive %s rejection without retrying it forever", async code => {
+    const h = await acceptHarness(); await h.api.selectAlternative("job-SAFER"); h.reject(409, code);
+    await expect(h.api.acceptSelectedPlan()).rejects.toMatchObject({ code });
+    await h.api.getSnapshot(); expect(h.posts).toHaveLength(1);
+    await expect(h.api.loadScenario("S0")).resolves.toMatchObject({ decisionState: { scenarioId: "S0" } });
+    expect(h.posts).toHaveLength(1);
+  });
+  it("restores the pending Accept's owned session when another tab switched the shared pointer", async () => {
+    const h = await acceptHarness(); await h.api.selectAlternative("job-SAFER"); h.lose();
+    await expect(h.api.acceptSelectedPlan()).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+    const key = [...h.values.keys()].find(key => key.includes("session.v1"))!;
+    const pointer = JSON.parse(h.values.get(key)!); pointer.session = { ...pointer.session, session_id: "other-owned-session", scenario_id: "S0" }; delete pointer.comparison;
+    h.values.set(key, JSON.stringify(pointer));
+    const restored = await new BackendDispatchApi({ client: h.client, storage: h.storage }).getSnapshot();
+    expect(restored.decisionState.sessionId).toBe(h.c.session_id); expect(restored.planState.acceptedExecution!.jobId).toBe("job-SAFER");
+    expect(h.posts).toHaveLength(2); expect(h.posts[1]).toBe(h.posts[0]); expect(h.paths).toContain(`/api/sessions/${h.c.session_id}`);
+  });
+  it("permits authenticated world reads but blocks commands when per-tab identity cannot persist", async () => {
+    sessionStorage.removeItem("saferoute.member3.command-tab.v1");
+    const write = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("Storage denied"); });
+    try {
+      const h = await acceptHarness(); await h.api.selectAlternative("job-SAFER");
+      await expect(h.api.acceptSelectedPlan()).rejects.toMatchObject({ code: "COMMAND_STORAGE_UNAVAILABLE" });
+      expect(h.posts).toEqual([]);
+    } finally { write.mockRestore(); }
+  });
+  it("keeps a lost Accept durable when another tab reads and starts a different command", async () => {
+    sessionStorage.setItem("saferoute.member3.command-tab.v1", "first-tab");
+    const h = await acceptHarness(); await h.api.selectAlternative("job-SAFER"); h.lose();
+    await expect(h.api.acceptSelectedPlan()).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+    const recoveryIdentity = sessionStorage.getItem("saferoute.member3.command-tab.v1")!;
+    sessionStorage.setItem("saferoute.member3.command-tab.v1", "second-tab");
+    const other = new BackendDispatchApi({ client: h.client, storage: h.storage });
+    await other.getSnapshot(); expect(h.posts).toHaveLength(1);
+    await expect(other.optimize()).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+    sessionStorage.setItem("saferoute.member3.command-tab.v1", recoveryIdentity);
+    const restored = await new BackendDispatchApi({ client: h.client, storage: h.storage }).getSnapshot();
+    expect(h.posts).toHaveLength(2); expect(h.posts[1]).toBe(h.posts[0]); expect(restored.backend!.basis.generation).toBe("1");
+    sessionStorage.removeItem("saferoute.member3.command-tab.v1");
+  });
+  it("accept_guard_checks_full_basis_and_witness including generation, every hash, and registry binding", async () => {
+    const h = await acceptHarness(); const snapshot = await h.api.selectAlternative("job-SAFER");
+    expect(canAcceptSelectedPlan(snapshot)).toBe(true);
+    for (const field of Object.keys(snapshot.backend!.basis)) {
+      const changed = structuredClone(snapshot); Object.assign(changed.backend!.basis, { [field]: field === "generation" ? "1" : "changed" });
+      expect(canAcceptSelectedPlan(changed), field).toBe(false);
+    }
+    for (const patch of [{ job_status: "QUEUED" }, { job_status: "FAILED" }, { plan_available: false }, { validation: { status: "NOT_RUN", valid: null } }, { job_id: "wrong-job" }]) {
+      const changed = structuredClone(snapshot); Object.assign(changed.backend!.jobs!["job-SAFER"], patch);
+      expect(canAcceptSelectedPlan(changed)).toBe(false);
+    }
+    for (const patch of [{ stale: true }, { mutationPending: true }, { error: { code: "AUTH_REQUIRED", message: "Missing token" } }]) {
+      const changed = structuredClone(snapshot); Object.assign(changed.backend!, patch); expect(canAcceptSelectedPlan(changed)).toBe(false);
+    }
+  });
+  it("select_is_ui_only even with a distinct accepted route", async () => {
+    const h = await acceptHarness(); h.activate("job-FASTEST", "0"); const before = await h.api.getSnapshot();
+    const count = h.paths.length; const after = await h.api.selectAlternative("job-SAFER");
+    expect(h.paths).toHaveLength(count); expect(h.posts).toEqual([]);
+    expect(after.decisionState).toEqual(before.decisionState); expect(after.executionState).toEqual(before.executionState);
+    expect(after.planState.acceptedExecution).toEqual(before.planState.acceptedExecution);
+    expect(after.planState.selectedAlternativeId).toBe("job-SAFER");
+    expect(createMapScene(after, after.planState.proposedAlternatives[2], "M3-V1").accepted[0].id).toContain("job-FASTEST");
+  });
+  it("accepts the selected job with exact string revision then reads fresh physical state", async () => {
+    const h = await acceptHarness(); await h.api.selectAlternative("job-SAFER"); const before = await h.api.getSnapshot();
+    const next = await h.api.acceptSelectedPlan();
+    expect(h.posts).toHaveLength(1); expect(JSON.parse(h.posts[0])).toMatchObject({ expected_revision: { head_version: "9007199254740993", generation: "0" }, request_id: expect.any(String) });
+    expect(h.paths.some(p => p.endsWith("/jobs/job-SAFER/accept"))).toBe(true);
+    expect(h.paths.slice(h.paths.findIndex(p => p.endsWith("/accept")) + 1)).toContain(`/api/sessions/${h.c.session_id}/state`);
+    expect(next.backend!.basis.generation).toBe("1"); expect(next.planState.acceptedExecution!.jobId).toBe("job-SAFER");
+    expect(next.decisionState.orders).toEqual(before.decisionState.orders); expect(next.decisionState.vehicles).toEqual(before.decisionState.vehicles);
+    expect(next.demoClock).toEqual(before.demoClock); expect(next.backend!.executionView.delivered_prefix).toEqual([]);
+    expect(next.backend!.acceptances).toEqual(h.history); expect(next.planState.acceptedPlans).toEqual([]);
+    expect(next.planState.selectedAlternativeId).toBeNull();
+  });
+  it("lost_accept_response_retries_without_double_accept or rewinding a newer active job", async () => {
+    const h = await acceptHarness(); await h.api.selectAlternative("job-SAFER"); h.lose();
+    await expect(h.api.acceptSelectedPlan()).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+    await expect(h.api.loadScenario("S0")).rejects.toMatchObject({ code: "PENDING_COMMAND" });
+    h.activate("job-FASTEST", "2");
+    const restored = await new BackendDispatchApi({ client: h.client, storage: h.storage }).getSnapshot();
+    expect(h.posts).toHaveLength(2); expect(h.posts[1]).toBe(h.posts[0]); expect(h.history).toHaveLength(1);
+    expect(restored.backend!.basis.generation).toBe("2"); expect(restored.planState.acceptedExecution!.jobId).toBe("job-FASTEST");
+    expect(restored.backend!.acceptances![0].job_id).toBe("job-SAFER"); expect(restored.planState.acceptedPlans).toEqual([]);
+    expect([...h.values.values()].join()).not.toContain("coordinates");
+  });
+  it("STALE_HEAD refreshes the race winner and requires a new Optimize without another Accept", async () => {
+    const h = await acceptHarness(); await h.api.selectAlternative("job-SAFER"); h.stale();
+    await expect(h.api.acceptSelectedPlan()).rejects.toMatchObject({ code: "STALE_HEAD" });
+    const next = await h.api.getSnapshot();
+    expect(h.posts).toHaveLength(1); expect(next.backend!.basis.generation).toBe("1");
+    expect(next.planState.acceptedExecution!.jobId).toBe("job-FASTEST"); expect(next.planState.proposedAlternatives).toEqual([]);
+    await expect(h.api.acceptSelectedPlan()).rejects.toMatchObject({ code: "ACCEPT_UNAVAILABLE" }); expect(h.posts).toHaveLength(1);
+  });
+  it("rechecks full basis with a fresh world before creating the durable Accept intent", async () => {
+    const h = await acceptHarness(); await h.api.selectAlternative("job-SAFER"); h.activate("job-FASTEST", "1");
+    await expect(h.api.acceptSelectedPlan()).rejects.toMatchObject({ code: "ACCEPT_UNAVAILABLE" });
+    expect(h.posts).toEqual([]);
+    expect((await h.api.getSnapshot()).planState.acceptedExecution!.jobId).toBe("job-FASTEST");
+    expect([...h.values.entries()].filter(([key]) => key.includes("command.v1"))).toEqual([]);
+  });
+  it("rehydrates confirmed history without cloning current geometry into historical plans", async () => {
+    const h = await acceptHarness(); await h.api.selectAlternative("job-SAFER"); await h.api.acceptSelectedPlan(); h.activate("job-FASTEST", "2");
+    const next = await new BackendDispatchApi({ client: h.client, storage: h.storage }).getSnapshot();
+    expect(h.posts).toHaveLength(1); expect(next.backend!.acceptances![0].job_id).toBe("job-SAFER");
+    expect(next.planState.acceptedExecution!.jobId).toBe("job-FASTEST"); expect(next.planState.acceptedPlans).toEqual([]);
+  });
+  it("double-click shares one intent and pending Accept blocks selection", async () => {
+    const h = await acceptHarness(); await h.api.selectAlternative("job-SAFER");
+    let release!: () => void; h.hold(new Promise<void>(resolve => { release = resolve; }));
+    const first = h.api.acceptSelectedPlan(), second = h.api.acceptSelectedPlan();
+    await expect(h.api.selectAlternative("job-FASTEST")).rejects.toMatchObject({ code: "PREVIEW_UNAVAILABLE" });
+    await vi.waitFor(() => expect(h.posts).toHaveLength(1));
+    expect((await h.api.capabilities()).accept).toBe(false);
+    release(); await Promise.all([first, second]); expect(h.posts).toHaveLength(1);
+  });
+});
 
 describe("BackendDispatchApi foundation", () => {
   it("reloads certified forecasts and selects a preview locally with zero Accept POSTs", async () => {
@@ -87,7 +289,6 @@ describe("BackendDispatchApi foundation", () => {
     expect(selected.planState.acceptedExecution).toBeNull(); expect(selected.executionState.activePlanId).toBeNull();
     expect(createMapScene(selected, selected.planState.proposedAlternatives[2], "M3-V1").proposed).toEqual([]);
     expect(selected.decisionState).toEqual(before.decisionState);
-    await expect(api.acceptSelectedPlan()).rejects.toMatchObject({ code: "PHASE_NOT_SUPPORTED" });
     const restored = await new BackendDispatchApi({ client, storage: s.storage }).getSnapshot();
     expect(restored.planState.selectedAlternativeId).toBe("job-SAFER"); expect(mutations).toEqual([]);
     expect(JSON.stringify([...s.values.values()])).not.toContain("coordinates");
@@ -259,7 +460,7 @@ describe("BackendDispatchApi foundation", () => {
     expect(scene.proposed).toEqual([]);
     expect(snapshots).toHaveLength(1);
     expect(s.requests.map((item) => item.path)).toEqual(["/ready", "/api/runtime/capabilities", "/api/scenarios", "/api/scenarios/S1/load",
-      "/api/sessions/m3-owned-session/state", "/api/sessions/m3-owned-session/orders", "/api/sessions/m3-owned-session/vehicles", "/api/sessions/m3-owned-session/locations"]);
+      "/api/sessions/m3-owned-session/state", "/api/sessions/m3-owned-session/orders", "/api/sessions/m3-owned-session/vehicles", "/api/sessions/m3-owned-session/locations", "/api/sessions/m3-owned-session/acceptances"]);
   });
 
   it("refresh re-reads the saved M3 pointer and ignores poisoned mock authority", async () => {
@@ -342,7 +543,8 @@ describe("BackendDispatchApi foundation", () => {
     const s = server();
     const api = new BackendDispatchApi({ client: s.client, storage: s.storage });
     await expect(api.selectAlternative("x")).rejects.toMatchObject({ code: "PREVIEW_UNAVAILABLE" });
-    for (const action of [() => api.acceptSelectedPlan(), () => api.triggerFixtureEvent("x"),
+    await expect(api.acceptSelectedPlan()).rejects.toMatchObject({ code: "ACCEPT_UNAVAILABLE" });
+    for (const action of [() => api.triggerFixtureEvent("x"),
       () => api.setUrgentOrderEnabled(true), () => api.pickupOrder({ vehicleId: "v", orderId: "o" }), () => api.deliverOrder({ vehicleId: "v", orderId: "o" }),
       () => api.advanceDemoClock(10), () => api.resetDemoSession()]) {
       await expect(action()).rejects.toMatchObject({ code: "PHASE_NOT_SUPPORTED" });

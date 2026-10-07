@@ -22,6 +22,20 @@ export function isAcceptableJob(job: M3JobView, current: M3Basis): boolean {
   return job.job_status === "COMPLETED" && job.plan_available && job.coverage_evaluated && job.validation.valid === true &&
     job.validation.status === "VALIDATED" && sameBasis(job.input_basis, current);
 }
+/** The UI and command boundary share the same guard; the server still owns CAS. */
+export function canAcceptSelectedPlan(snapshot: DispatchSnapshot): boolean {
+  const backend = snapshot.backend;
+  const proposal = snapshot.planState.proposedAlternatives.find(p => p.id === snapshot.planState.selectedAlternativeId);
+  if (!backend) return Boolean(proposal && proposalCurrency(proposal, snapshot) === "CURRENT");
+  const origin = proposal?.origin, job = origin?.kind === "MEMBER3" ? backend.jobs?.[origin.jobId] : undefined;
+  return Boolean(!backend.stale && !backend.error && !backend.mutationPending && backend.capabilities?.accept &&
+    proposal && origin?.kind === "MEMBER3" && proposal.id === origin.jobId &&
+    origin.comparisonId === backend.comparison?.comparison_id &&
+    backend.comparison.jobs.some(row => row.job_id === origin.jobId && row.profile === origin.profile) &&
+    proposal.nativeForecast?.jobView.job_id === origin.jobId && job && job.job_id === origin.jobId &&
+    proposalCurrency(proposal, snapshot) === "CURRENT" && isAcceptableJob(job, backend.basis) &&
+    isAcceptableJob(proposal.nativeForecast.jobView, backend.basis));
+}
 export function proposalCurrency(proposal: ProposedAlternative, snapshot: DispatchSnapshot): "CURRENT" | "STALE" {
   if (snapshot.backend) return proposal.origin?.kind === "MEMBER3" && proposal.origin.sessionId === snapshot.backend.basis.session_id &&
     sameBasis(proposal.origin.inputBasis, snapshot.backend.basis) ? "CURRENT" : "STALE";
