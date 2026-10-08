@@ -194,7 +194,7 @@ Progress 2026-10-07: user-authorized public forecast extension M3 0.9.0 implemen
 - [x] Fresh full tests/typecheck/build; `node scripts/audit-backend-build.mjs` PASS; run native `browser.mjs --all` against built frontend (không chỉ dev source), lưu **post-cleanup** receipt riêng.
 - [x] Verify browser network/backend artifact no road-pack/mock fixture/engine/schematic; runtime bearer absent source/dist/evidence/staged files; env mẫu chỉ non-secret backend/base URL.
 - [x] Run explicit mock/offline smoke và unit injection; README startup/auth/session/phase/failure limitations đúng release; không công bố native SLA/GPS/calibration/optimality.
-- [ ] Tick final gate khi every task checked + public forecast contract satisfied + spec E2E matrix evidence đầy đủ. Ghi result counts/paths/commit; residual manual device checks ghi rõ scope, không claim chưa chạy.
+- [x] Tick final gate khi every task checked + public forecast contract satisfied + spec E2E matrix evidence đầy đủ. Ghi result counts/paths/commit; residual manual device checks ghi rõ scope, không claim chưa chạy.
 
 ## Evidence index
 
@@ -208,7 +208,7 @@ Progress 2026-10-07: user-authorized public forecast extension M3 0.9.0 implemen
 | Phase 6 | P6-01/P6-02/P6-03 PASS; [Driver/replay, two-tab native S0/S2 and verification](../../../../frontend/docs/member3-phase6.md). 327 tests/43 files, typecheck/build PASS; prerequisites and review fixes documented. |
 | Forecast public contract | User-authorized [0.9.0 extension](../../../M3_FORECAST_API_HANDOFF_20261007.md), separate sealed build/receipts from received 0.8.0. |
 | Pre-cleanup E2E / post-cleanup E2E | [Pre-cleanup](../../../../frontend/docs/evidence/member3-integration/phase7-pre-cleanup-native.json) and [post-cleanup built native](../../../../frontend/docs/evidence/member3-integration/phase7-post-cleanup-native.json) PASS independently: S0–S4, 25 layouts and 10 native failure branches each. |
-| Artifact/import/secret audit | [Final verification](../../../../frontend/docs/evidence/member3-integration/phase7-final-verification.json), [backend graph audit](../../../../frontend/docs/evidence/member3-integration/phase7-backend-build-audit.json), [secret scan](../../../../frontend/docs/evidence/member3-integration/phase7-final-secret-scan.json) and [explicit offline mock](../../../../frontend/docs/evidence/member3-integration/phase7-mock-smoke.json) PASS. 342 tests/46 files; typecheck/build and 9 audit tests PASS. [Phase 7 handoff](../../../../frontend/docs/member3-phase7.md); fresh review pending. |
+| Artifact/import/secret audit | [Final verification](../../../../frontend/docs/evidence/member3-integration/phase7-final-verification.json), [backend graph audit](../../../../frontend/docs/evidence/member3-integration/phase7-backend-build-audit.json), [secret scan](../../../../frontend/docs/evidence/member3-integration/phase7-final-secret-scan.json) and [explicit offline mock](../../../../frontend/docs/evidence/member3-integration/phase7-mock-smoke.json) PASS. 342 tests/46 files; typecheck/build and 9 audit tests PASS. [Phase 7 handoff](../../../../frontend/docs/member3-phase7.md); [fresh review](../../../../frontend/docs/evidence/member3-integration/phase7-review.md) PASS, Critical/Important/Minor 0. Candidate `176884e`; separate manual/publication scopes remain pending. |
 
 Bộ spec/plan/tasks đã viết không đồng nghĩa implementation các tasks chưa tick đã hoàn thành.
 

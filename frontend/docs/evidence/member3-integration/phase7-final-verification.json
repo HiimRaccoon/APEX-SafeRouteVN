@@ -207,14 +207,21 @@
       "api_requests": 0
     },
     "secret_scan": {
-      "schema_version": "saferoute-phase7-known-bearer-scan/1",
+      "file": "phase7-final-secret-scan.json",
       "status": "PASS",
-      "known_credentials": 2,
-      "files": 734,
-      "bytes": 224442484,
-      "hits": [],
-      "scope": "All tracked and non-ignored candidate files plus actual dist and dist-mock; private config excluded from publication",
-      "recorded_at": "2026-10-08T13:43:54.214Z"
+      "known_credentials": 2
+    },
+    "whole_change_review": {
+      "file": "phase7-review.md",
+      "status": "PASS",
+      "reviewer": "gpt-6-astra",
+      "base_commit": "a8b20afb67a90bb346901d548cb9ff35dfbad116",
+      "candidate_commit": "176884e3400d86827c73bb9afec86f3774cb69c0",
+      "critical": 0,
+      "important": 0,
+      "minor": 0,
+      "standards": "PASS",
+      "spec": "PASS"
     }
   },
   "limits": [
