@@ -222,6 +222,15 @@
       "minor": 0,
       "standards": "PASS",
       "spec": "PASS"
+    },
+    "upstream_integration": {
+      "status": "PASS",
+      "upstream_commit": "5c71e27b5ef6d67815b7fb25b5f0d920d079ab3b",
+      "merge_commit": "0fb430377ef21b8eb62d93e7d8ce3fb953671297",
+      "change": "README.md only",
+      "reviewed_frontend_unchanged": true,
+      "artifact_graph_sha256": "6f76d82561cc80b43bc73bf715cf421205246d68090fcd1ce6280b59d3504a90",
+      "installation_root_readme_preserved": true
     }
   },
   "limits": [

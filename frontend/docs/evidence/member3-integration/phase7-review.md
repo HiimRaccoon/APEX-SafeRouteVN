@@ -33,6 +33,14 @@ Every scope the reviewer set aside was regraded by user effect. These remain exp
 - Final: Ruling: Accept disclosed remaining Vite bundle warning within the isolation scope; broader performance optimization has no release SLA here. Cost if wrong: Load-time performance on target devices remains unmeasured.
 - Final: Ruling: Keep production identity/login provisioning outside this frontend cutover; require private runtime credentials and show IDs/placeholders for missing metadata. Cost if wrong: Production login and identity provisioning still need their own implementation/validation.
 
+- Final: Ruling: Merge upstream 5c71e27 README-only deletion without rewriting reviewed commits; preserve the collaborator change and retain exact reviewed frontend code/artifact. Cost if wrong: the removed root guide may need a coordinated restoration; Phase 7 runtime behavior is unchanged.
+
+- Final: Ruling: Preserve the installation workspace root README, whose pre-existing content differs from the publication baseline; sync Phase 7 frontend/docs only and retain the upstream README in the Git checkout. Cost if wrong: installation and publication root guides remain different and need explicit coordination to reconcile.
+
+## Upstream integration
+
+The first push was rejected because upstream main had `5c71e27b5ef6d67815b7fb25b5f0d920d079ab3b`, which only removed root README content. Merge `0fb430377ef21b8eb62d93e7d8ce3fb953671297` preserves that change and both reviewed Phase 7 commits. A direct diff confirms identical frontend source, tests, scripts and build configuration to the reviewed candidate; the actual artifact audit still has the exact accepted graph SHA. No native re-run or repeat review is claimed or required for this documentation-only integration.
+
 ## Deferred minors
 
 - Previously recorded Phase 5 history-cap 101-entry behavior is unchanged and remains deferred.
