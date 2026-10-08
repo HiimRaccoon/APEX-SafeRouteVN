@@ -124,20 +124,20 @@ Progress 2026-10-07: user-authorized public forecast extension M3 0.9.0 implemen
 
 **Dependencies:** P4. **Files:** client/types/capabilities/BackendDispatchApi/AdminPage, related API/UI tests; harness replay-step helper. **Consumes:** M3PendingEventsView + server apply_allowed. **Produces:** events/apply UI capability, client.step prerequisite for native barrier testing (no Driver autoplay UI yet).
 
-- [ ] Test `event_is_not_due_until_observed_exact_barrier`: apply_allowed=false → disabled/not due; timestamp đúng nhưng chưa observation cũng không enabled; S1 absent events không tạo event từ fixture.
-- [ ] Test backend urgent Apply/Applied không OFF; mock urgent toggle/Pickup/Delivered không đổi; missing public polygon không lấy mock rain geometry.
-- [ ] FAIL → implement server event metadata/client step/harness + mode controls; targeted/typecheck/build PASS.
-- [ ] Native S2/S3/S4 harness Accept → real replay/step exact target_time → server apply_allowed=true. Không tự advanceDemoClock hoặc vượt pending event.
+- [x] Test `event_is_not_due_until_observed_exact_barrier`: apply_allowed=false → disabled/not due; timestamp đúng nhưng chưa observation cũng không enabled; S1 absent events không tạo event từ fixture.
+- [x] Test backend urgent Apply/Applied không OFF; mock urgent toggle/Pickup/Delivered không đổi; missing public polygon không lấy mock rain geometry.
+- [x] FAIL → implement server event metadata/client step/harness + mode controls; targeted/typecheck/build PASS.
+- [x] Native S2/S3/S4 harness Accept → real replay/step exact target_time → server apply_allowed=true. Không tự advanceDemoClock hoặc vượt pending event.
 
 ### P5-02 — Apply transition và re-optimize new world
 
 **Dependencies:** P5-01. **Files:** client/BackendDispatchApi/requestId/execution/world adapter/Admin event state, API/UI tests/harness. **Consumes:** event ID/current expected revision. **Produces:** `applyEvent(eventId)`, legacy backend triggerFixtureEvent delegation, fresh world and stale proposals.
 
-- [ ] Test `applies_once_then_refreshes`: command body/ID durable, EVENT_NOT_DUE/ALREADY_APPLIED/STALE_HEAD preserved; retry same ID one mutation, new ID for applied event rejected; no frontend toggle rollback.
-- [ ] Test refresh GET replay/history restores APPLIED chỉ từ confirmed receipts; absent event/truncated 100-receipt history không tạo applied transition giả.
-- [ ] Test S3 onboard ownership/delivered prefix retained, S2 new orders from projection, S4 context server expiry; old proposal stale after basis mutation. Re-optimize binds new full basis, not old fixture/version.
-- [ ] FAIL → implement; targeted/full tests/typecheck/build PASS.
-- [ ] Native Phase 5 S2/S3/S4 apply + comparison evidence; record barrier/time/input/output bases/diagnostics. Driver replay UI vẫn Phase 6, không dependency vòng.
+- [x] Test `applies_once_then_refreshes`: command body/ID durable, EVENT_NOT_DUE/ALREADY_APPLIED/STALE_HEAD preserved; retry same ID one mutation, new ID for applied event rejected; no frontend toggle rollback.
+- [x] Test refresh GET replay/history restores APPLIED chỉ từ confirmed receipts; absent event/truncated 100-receipt history không tạo applied transition giả.
+- [x] Test S3 onboard ownership/delivered prefix retained, S2 new orders from projection, S4 context server expiry; old proposal stale after basis mutation. Re-optimize binds new full basis, not old fixture/version.
+- [x] FAIL → implement; targeted/full tests/typecheck/build PASS.
+- [x] Native Phase 5 S2/S3/S4 apply + comparison evidence; record barrier/time/input/output bases/diagnostics. Driver replay UI vẫn Phase 6, không dependency vòng.
 
 ## Phase 6 — Driver Execution / Replay
 
@@ -204,7 +204,8 @@ Progress 2026-10-07: user-authorized public forecast extension M3 0.9.0 implemen
 | Phase 2 | [Native S1](../../../../frontend/docs/evidence/member3-integration/phase2-latest.json), [verification](../../../../frontend/docs/evidence/member3-integration/verification.json), [review fixes](../../../../frontend/docs/evidence/member3-integration/review.md). 196 tests/typecheck/build PASS; comparison COMPARABLE, physical world unchanged. |
 | Phase 3 | [Native browser/map/scopes](../../../../frontend/docs/evidence/member3-integration/phase3-forecast-browser-native.json), [HTTP/read-only](../../../../frontend/docs/evidence/member3-integration/phase3-forecast-http-native.json), [explicit scopes](../../../../frontend/docs/evidence/member3-integration/phase3-forecast-scopes-http-native.json), [verification](../../../../frontend/docs/evidence/member3-integration/phase3-forecast-verification.json) PASS. 234 frontend/54 SDK/875 backend tests; typecheck/build PASS. |
 | Phase 4 | P4-01/P4-02 PASS; [implementation and receipts](../../../../frontend/docs/member3-phase4.md). |
-| Phase 5–6 | Chưa triển khai; Event/Replay controls and cross-tab convergence remain deferred. |
+| Phase 5 | P5-01/P5-02 PASS; [implementation, native S2/S3/S4 and verification](../../../../frontend/docs/member3-phase5.md). 294 tests/38 files, typecheck/build PASS; native continuations documented. |
+| Phase 6 | Chưa triển khai; Driver Replay controls and cross-tab convergence remain deferred. |
 | Forecast public contract | User-authorized [0.9.0 extension](../../../M3_FORECAST_API_HANDOFF_20261007.md), separate sealed build/receipts from received 0.8.0. |
 | Pre-cleanup E2E / post-cleanup E2E | Chưa chạy; hai receipts riêng bắt buộc, không dùng Foundation receipt thay. |
 | Artifact/import/secret audit | Chưa chạy cho migration đầy đủ; cần backend production build thực tế P7. |

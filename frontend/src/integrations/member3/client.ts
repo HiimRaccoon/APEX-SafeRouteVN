@@ -2,6 +2,9 @@ import { Member3Error } from "./errors";
 import { parseComparisonReceipt, parseComparisonView, parseJobView } from "./jobViewAdapter";
 import { parseJobForecast } from "./forecastViewAdapter";
 import { parseAcceptanceView, parseAcceptanceAudit } from "./acceptance";
+import { parsePendingEvents } from "./events";
+import { parseReplayAudit, parseReplayMutation } from "./replay";
+import type { ReplayStepRequest, ApplyEventRequest } from "./types";
 import type { AcceptPlanRequest, M3Session } from "./types";
 import type { CompareProfilesRequest, M3ComparisonCancellation } from "./types";
 import type { M3Capabilities, M3Catalog, M3Envelope, M3ExecutionView, M3LoadedSession, M3LocationsView, M3OrdersView, M3Ready, M3VehiclesView } from "./types";
@@ -33,6 +36,22 @@ export class Member3Client {
   capabilities() { return this.request<M3Capabilities>("/api/runtime/capabilities"); }
   scenarios() { return this.request<M3Catalog>("/api/scenarios"); }
   session(id: string) { return this.request<M3Session>(`/api/sessions/${encodeURIComponent(id)}`); }
+  async events(sid: string, signal?: AbortSignal) {
+    return parsePendingEvents(await this.request(`/api/sessions/${encodeURIComponent(sid)}/events`, true, undefined, signal), sid);
+  }
+  async replayHistory(sid: string, signal?: AbortSignal) {
+    return parseReplayAudit(await this.request(`/api/sessions/${encodeURIComponent(sid)}/replay/history`, true, undefined, signal), sid);
+  }
+  async step(sid: string, body: ReplayStepRequest) {
+    const view = parseReplayMutation(await this.request(`/api/sessions/${encodeURIComponent(sid)}/replay/step`, true, body), sid, "advance");
+    if (view.receipt.input_basis.head_version !== body.expected_revision.head_version || view.receipt.input_basis.generation !== body.expected_revision.generation) throw new Member3Error("INVALID_RESPONSE", "Replay receipt differs from requested revision.");
+    return view;
+  }
+  async applyEvent(sid: string, eid: string, body: ApplyEventRequest) {
+    const view = parseReplayMutation(await this.request(`/api/sessions/${encodeURIComponent(sid)}/events/${encodeURIComponent(eid)}/apply`, true, body), sid, "apply_event", eid);
+    if (view.receipt.input_basis.head_version !== body.expected_revision.head_version || view.receipt.input_basis.generation !== body.expected_revision.generation) throw new Member3Error("INVALID_RESPONSE", "Event receipt differs from requested revision.");
+    return view;
+  }
   loadScenario(id: string, requestId: string) {
     return this.request<M3LoadedSession>(`/api/scenarios/${encodeURIComponent(id)}/load`, true, { request_id: requestId });
   }

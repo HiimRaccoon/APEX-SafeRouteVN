@@ -6,7 +6,7 @@ import { MockDispatchApi } from "../services/api/MockDispatchApi";
 import { basis, comparison } from "../integrations/member3/testFixtures";
 import { phase2Capabilities } from "../integrations/member3/capabilities";
 import type { DispatchSnapshot } from "../shared/types/dispatch";
-import type { M3ComparisonView, M3ExecutionView } from "../integrations/member3/types";
+import type { M3ComparisonView, M3ExecutionView, M3PendingEventsView, M3ReplayAudit } from "../integrations/member3/types";
 import { acceptedView } from "../integrations/member3/acceptedTestFixture";
 import { adaptAcceptedExecution } from "../integrations/member3/executionViewAdapter";
 import { LABELS as L } from "./admin.labels";
@@ -18,10 +18,14 @@ class BackendView extends MockDispatchApi {
   acceptEnabled = false;
   mutationPending = false;
   invalidWitness = false;
+  eventView?: M3PendingEventsView;
+  replayHistory?: M3ReplayAudit;
+  triggeredEventIds: string[] = [];
   private previewSelection: string | null = null;
   constructor(private stale: boolean, private running: boolean, private metrics = false, private accepted = false, private preview = false) { super(); }
   override async selectAlternative(id: string) { this.previewSelection = id; return this.getSnapshot(); }
   override subscribe(_listener: (snapshot: DispatchSnapshot) => void) { return () => {}; }
+  override async triggerFixtureEvent(id: string) { this.triggeredEventIds.push(id); return this.getSnapshot(); }
   override async getSnapshot() {
     const s = await super.getSnapshot(); s.decisionState.sessionId = basis.session_id;
     const c = comparison() as M3ComparisonView;
@@ -49,9 +53,45 @@ class BackendView extends MockDispatchApi {
     }
     s.backend.capabilities!.accept = this.acceptEnabled;
     s.backend.mutationPending = this.mutationPending;
+    s.backend.pendingEvents = this.eventView;
+    s.backend.replayHistory = this.replayHistory;
+    s.backend.capabilities!.applyEvent = !this.stale;
     return s;
   }
 }
+it("uses server Apply readiness and never exposes an urgent OFF transition", async () => {
+  const api = new BackendView(false, false);
+  api.eventView = { schema_version: "saferoute-m3-pending-events/1", basis, current_time: "2026-09-27T21:15:00+07:00",
+    execution_mode: "SIMULATED_REPLAY", real_world_observation: false,
+    events: [{ event_id: "wire-urgent", event_type: "URGENT_ORDER", timestamp: "2026-09-27T21:15:00+07:00", apply_allowed: false }] };
+  const user = userEvent.setup(); render(<MemoryRouter initialEntries={["/admin"]}><App api={api} /></MemoryRouter>);
+  expect(await screen.findByRole("button", { name: "Apply URGENT_ORDER" })).toBeDisabled();
+  expect(screen.getByText(/Not due/)).toBeInTheDocument();
+  expect(screen.queryByRole("switch", { name: L.urgentOrder })).not.toBeInTheDocument();
+  api.eventView.events[0].apply_allowed = true;
+  await user.click(screen.getByRole("button", { name: "Refresh backend" }));
+  await user.click(screen.getByRole("button", { name: "Apply URGENT_ORDER" }));
+  expect(api.triggeredEventIds).toEqual(["wire-urgent"]);
+  api.eventView.events = [];
+  api.replayHistory = { schema_version: "saferoute-m3-replay-history/1", session_id: basis.session_id, history: [{
+    schema_version: "saferoute-m3-replay-receipt/1", mutation_id: "event-1", session_id: basis.session_id,
+    operation: "apply_event", status: "APPLIED", source: "M2_PUBLIC_SDK", input_basis: basis, basis: { ...basis, head_version: "3", head_sha256: "4".repeat(64) },
+    event_id: "wire-urgent", event_type: "URGENT_ORDER", event_sha256: "e".repeat(64), recorded_at: "2026-10-08T00:00:00+07:00",
+    links: { state: `/api/sessions/${basis.session_id}/state`, history: `/api/sessions/${basis.session_id}/replay/history` }
+  }] };
+  await user.click(screen.getByRole("button", { name: "Refresh backend" }));
+  expect(screen.getByRole("button", { name: "Apply URGENT_ORDER" })).toHaveTextContent("Applied");
+  expect(screen.getByRole("button", { name: "Apply URGENT_ORDER" })).toBeDisabled();
+});
+it("does not fabricate applied events when pending metadata and truncated history are empty", async () => {
+  const api = new BackendView(false, false);
+  api.eventView = { schema_version: "saferoute-m3-pending-events/1", basis, current_time: "2026-09-27T21:15:00+07:00", execution_mode: "SIMULATED_REPLAY", real_world_observation: false, events: [] };
+  api.replayHistory = { schema_version: "saferoute-m3-replay-history/1", session_id: basis.session_id, history: [] };
+  render(<MemoryRouter initialEntries={["/admin"]}><App api={api} /></MemoryRouter>);
+  expect(await screen.findByText(/No pending events/)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Apply / })).not.toBeInTheDocument();
+  expect(screen.queryByText("Applied")).not.toBeInTheDocument();
+});
 it("enables Accept only for a selected current certified job and blocks pending or invalid jobs", async () => {
   const api = new BackendView(false, false, false, true, true); api.acceptEnabled = true;
   const user = userEvent.setup();

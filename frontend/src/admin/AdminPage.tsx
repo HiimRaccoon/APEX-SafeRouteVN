@@ -16,6 +16,7 @@ import {
   Truck,
 } from "lucide-react";
 import { DispatchMap } from "../shared/components/DispatchMap";
+import { confirmedEvents } from "../integrations/member3/events";
 import { adminVehicleColor, createAdminMapPresentation } from "./adminMapPresentation";
 import { RouteVisibilityControls } from "./RouteVisibilityControls";
 import type { ImmutablePlanContent, PlanProfile } from "../shared/types/dispatch";
@@ -246,7 +247,7 @@ export function AdminPage() {
       </header>
 
       {/* ── Banners ── */}
-      {assessment?.status === "NEEDS_REOPTIMIZATION" && (
+      {(assessment?.status === "NEEDS_REOPTIMIZATION" || backend?.needsReoptimization) && (
         <div className="stale-banner" role="status">
           <span className="banner-icon">⚠</span>
           <span>Current plan needs re-optimization due to order, weather or vehicle changes.</span>
@@ -567,6 +568,19 @@ export function AdminPage() {
 
               {/* Event Toggles — clean, no scenario code shown */}
               <div className="event-toggles">
+                {backend ? <>
+                  {confirmedEvents(backend.pendingEvents, backend.replayHistory).length === 0 && <p>No pending events. History includes the last 100 receipts.</p>}
+                  {confirmedEvents(backend.pendingEvents, backend.replayHistory).map(event => <div className="toggle-row" key={event.event_id}>
+                    <span className="toggle-label">{event.event_type === "URGENT_ORDER" ? L.urgentOrder : event.event_type === "VEHICLE_UNAVAILABLE" ? L.driverUnavailable : L.localRain}
+                      {!event.applied && !event.apply_allowed && <small style={{ display: "block" }}>{event.timestamp}</small>}
+                    </span>
+                    <button className="epoch-advance-btn" type="button" aria-label={`Apply ${event.event_type}`} data-event-id={event.event_id}
+                      disabled={pending || backend.stale || backend.mutationPending || !backend.capabilities?.applyEvent || event.applied || !event.apply_allowed}
+                      onClick={() => void invoke(() => api.triggerFixtureEvent(event.event_id))}>
+                      {event.applied ? "Applied" : event.apply_allowed ? "Apply" : "Not due"}
+                    </button>
+                  </div>)}
+                </> : <>
                 <div className="toggle-row">
                   <span className="toggle-label">{L.urgentOrder}</span>
                   <ToggleSwitch
@@ -598,6 +612,7 @@ export function AdminPage() {
                     onTrigger={() => triggerEvent("LOCAL_RAIN_WHAT_IF")}
                   />
                 </div>
+                </>}
               </div>
 
               {/* Demo tools — collapsed by default */}

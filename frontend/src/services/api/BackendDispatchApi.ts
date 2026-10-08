@@ -9,6 +9,7 @@ import { phase2Capabilities } from "../../integrations/member3/capabilities";
 import { createPollCoordinator, type PollCoordinator, transientM3Error } from "../../integrations/member3/polling";
 import { terminalComparison } from "../../integrations/member3/jobViewAdapter";
 import { mapM3World } from "../../integrations/member3/worldState";
+import { bindPendingEvents, eventType } from "../../integrations/member3/events";
 import type { DispatchSnapshot } from "../../shared/types/dispatch";
 import type { ScenarioId } from "../../shared/types/scenario";
 import type { DispatchApi } from "./DispatchApi";
@@ -24,7 +25,7 @@ function samePublicValue(left: unknown, right: unknown): boolean {
   }
   return false;
 }
-function forecastCapabilities(fresh: boolean) { return { ...phase2Capabilities(fresh), forecastGeometry: fresh, accept: fresh }; }
+function forecastCapabilities(fresh: boolean) { return { ...phase2Capabilities(fresh), forecastGeometry: fresh, accept: fresh, applyEvent: fresh }; }
 function browserStorage(): PointerStorage | undefined {
   try { return typeof window === "undefined" ? undefined : window.localStorage; } catch { return undefined; }
 }
@@ -67,6 +68,7 @@ export class BackendDispatchApi implements DispatchApi {
   private pollWorldRead?: Promise<DispatchSnapshot>;
   private queuedOperations = 0;
   private acceptFlight?: Promise<DispatchSnapshot>;
+  private applyFlight?: { eventId: string; promise: Promise<DispatchSnapshot> };
   private acceptances: M3AcceptanceReceipt[] = [];
 
   constructor(options: { client?: Member3Client; storage?: PointerStorage } = {}) {
@@ -119,7 +121,7 @@ export class BackendDispatchApi implements DispatchApi {
   }
   private async currentWorld() {
     const pending = this.commands.read();
-    if (pending?.operation === "accept" && pending.sessionId && pending.sessionId !== this.pointer.session?.session_id) {
+    if (pending && ["accept", "apply_event"].includes(pending.operation) && pending.sessionId && pending.sessionId !== this.pointer.session?.session_id) {
       // The shared pointer can change in another tab; recover this command's owned session.
       const recovered = await this.client.session(pending.sessionId);
       if (!validSession(recovered) || recovered.session_id !== pending.sessionId || recovered.build_sha256 !== pending.inputBasis?.build_sha256) {
@@ -137,6 +139,7 @@ export class BackendDispatchApi implements DispatchApi {
       if (pending.operation === "compare") return this.submitComparison();
       if (pending.operation === "cancelComparison") return this.performCancelComparison();
       if (pending.operation === "accept") return this.performAccept();
+      if (pending.operation === "apply_event") return this.performApplyEvent(pending.resourceId ?? "");
       throw new Member3Error("PENDING_COMMAND", "The pending backend command cannot be reconciled by this phase.");
     }
     if (pending) throw new Member3Error("PENDING_COMMAND", "Pending command belongs to another session; restore its session before retrying.");
@@ -205,8 +208,17 @@ export class BackendDispatchApi implements DispatchApi {
       const orders = await this.client.orders(session.session_id, signal);
       const vehicles = await this.client.vehicles(session.session_id, signal);
       const locations = await this.client.locations(session.session_id, signal);
+      const events = await this.client.events(session.session_id, signal);
+      const history = await this.client.replayHistory(session.session_id, signal);
       try {
         const snapshot = mapM3World(session, state, orders, vehicles, locations, this.client.baseUrl);
+        bindPendingEvents(events, state);
+        snapshot.backend!.pendingEvents = events;
+        if (history.history.some(r => r.input_basis.build_sha256 !== session.build_sha256)) throw new Member3Error("INVALID_RESPONSE", "Replay history belongs to another build.");
+        if (history.history.some(r => BigInt(r.input_basis.head_version) > BigInt(state.basis.head_version) || BigInt(r.input_basis.generation) > BigInt(state.basis.generation) ||
+          r.basis.session_id === session.session_id && (BigInt(r.basis.head_version) > BigInt(state.basis.head_version) || BigInt(r.basis.generation) > BigInt(state.basis.generation)))) throw new Member3Error("STATE_CHANGED", "Replay history is newer than this world read.");
+        snapshot.backend!.replayHistory = history;
+        snapshot.backend!.needsReoptimization = state.active_job_id === null && state.observed_metrics !== null;
         signal?.throwIfAborted();
         return publish ? this.publish(snapshot, true) : snapshot;
       } catch (error) {
@@ -422,7 +434,45 @@ export class BackendDispatchApi implements DispatchApi {
     this.completeCommand(pending.requestId);
     return this.publish(world, true);
   }
-  triggerFixtureEvent(_id: string) { return this.unsupported(); }
+  triggerFixtureEvent(id: string) { return this.applyEvent(id); }
+  applyEvent(id: string): Promise<DispatchSnapshot> {
+    if (this.applyFlight) return this.applyFlight.eventId === id ? this.applyFlight.promise : Promise.reject(new Member3Error("PENDING_COMMAND", "Another event command needs reconciliation."));
+    const pending = this.commands.read();
+    if (pending && (pending.operation !== "apply_event" || pending.resourceId !== id)) return Promise.reject(new Member3Error("PENDING_COMMAND", "Resolve the original command before another Apply."));
+    if (!pending && (!this.snapshot || this.queuedOperations || this.snapshot.backend?.stale || !this.snapshot.backend?.capabilities?.applyEvent)) return Promise.reject(new Member3Error("EVENT_UNAVAILABLE", "Refresh the server world before Apply."));
+    const promise = this.enqueue(() => this.performApplyEvent(id)).finally(() => { this.applyFlight = undefined; });
+    this.applyFlight = { eventId: id, promise }; return promise;
+  }
+  private async performApplyEvent(id: string): Promise<DispatchSnapshot> {
+    const session = this.pointer.session;
+    if (!session) throw new Member3Error("EVENT_UNAVAILABLE", "No owned session is loaded.");
+    const existing = this.commands.read();
+    if (existing && (existing.operation !== "apply_event" || existing.resourceId !== id || existing.sessionId !== session.session_id)) throw new Member3Error("PENDING_COMMAND", "Resolve the original backend command.");
+    if (!existing) await this.readWorld(session);
+    const event = this.snapshot?.backend?.pendingEvents?.events.find(e => e.event_id === id);
+    if (!existing && !event) throw new Member3Error(this.snapshot?.backend?.replayHistory?.history.some(r => r.operation === "apply_event" && r.event_id === id) ? "EVENT_ALREADY_APPLIED" : "EVENT_UNAVAILABLE", "Event is not pending in this server session.");
+    if (!existing && !event!.apply_allowed) throw new Member3Error("EVENT_NOT_DUE", "Replay the accepted plan to the observed event barrier first.");
+    const intent = existing ? { operation: existing.operation, sessionId: existing.sessionId, resourceId: existing.resourceId, body: existing.body, inputBasis: existing.inputBasis, eventType: existing.eventType } :
+      { operation: "apply_event", sessionId: session.session_id, resourceId: id, body: { expected_revision: expectedRevision(this.snapshot!.backend!.basis) }, inputBasis: this.snapshot!.backend!.basis, eventType: event!.event_type };
+    const pending = this.beginCommand(intent);
+    if (!pending.resourceId || !pending.inputBasis || parseBasis(pending.inputBasis).session_id !== session.session_id || pending.inputBasis.build_sha256 !== session.build_sha256 ||
+      !eventType(pending.eventType) || JSON.stringify(pending.body) !== JSON.stringify({ expected_revision: expectedRevision(pending.inputBasis) })) throw new Member3Error("INVALID_RESPONSE", "Stored Apply intent has invalid event/basis binding.");
+    this.publish(this.snapshot!);
+    let result;
+    try { result = await this.retryCommand(() => this.client.applyEvent(session.session_id, pending.resourceId!, { expected_revision: expectedRevision(pending.inputBasis!), request_id: pending.requestId })); }
+    catch (error) {
+      if (error instanceof Member3Error && (error.status === 409 && ["STALE_HEAD", "EVENT_NOT_DUE", "EVENT_ALREADY_APPLIED", "ACCEPTED_REPLAY_REQUIRED", "EVENT_UNKNOWN", "EVENT_TYPE_UNSUPPORTED", "PLAN_NOT_ACTIVE"].includes(error.code) || error.status === 404 && error.code === "EVENT_NOT_FOUND")) {
+        this.completeCommand(pending.requestId); await this.readWorld(session); await this.readAcceptances(session.session_id);
+      }
+      throw error;
+    }
+    if (!sameBasis(result.receipt.input_basis, pending.inputBasis) || result.receipt.event_type !== pending.eventType) throw new Member3Error("INVALID_RESPONSE", "Apply receipt differs from original event intent.");
+    const world = await this.readWorld(session, undefined, false);
+    await this.readAcceptances(session.session_id);
+    if (!world.backend!.replayHistory!.history.some(r => r.mutation_id === result.receipt.mutation_id)) world.backend!.replayHistory!.history.unshift(result.receipt);
+    this.completeCommand(pending.requestId);
+    return this.publish(world, true);
+  }
   setUrgentOrderEnabled(_enabled: boolean) { return this.unsupported(); }
   pickupOrder(_input: { vehicleId: string; orderId: string }) { return this.unsupported(); }
   deliverOrder(_input: { vehicleId: string; orderId: string }) { return this.unsupported(); }

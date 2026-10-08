@@ -25,6 +25,21 @@ export interface M3WorldView {
   execution_mode: "SIMULATED_REPLAY";
   real_world_observation: false;
 }
+export type M3EventType = "URGENT_ORDER" | "VEHICLE_UNAVAILABLE" | "LOCAL_RAIN_WHAT_IF";
+export interface M3PendingEvent { event_id: string; event_type: M3EventType; timestamp: string; apply_allowed: boolean }
+export interface M3PendingEventsView extends M3WorldView { schema_version: "saferoute-m3-pending-events/1"; events: M3PendingEvent[] }
+export interface M3ReplayReceipt {
+  schema_version: "saferoute-m3-replay-receipt/1"; mutation_id: string; session_id: string;
+  operation: "advance" | "apply_event" | "pause" | "reset"; status: "ADVANCED" | "NOOP" | "APPLIED" | "PAUSED" | "RESET";
+  source: "M2_PUBLIC_SDK" | "M3_MANUAL_CONTROL" | "M3_NEW_SESSION";
+  input_basis: M3Basis; basis: M3Basis; recorded_at: string; links: { state: string; history: string };
+  target_time?: string; event_id?: string; event_type?: M3EventType; event_sha256?: string;
+  mode?: "STEP"; paused?: true; new_session_id?: string; new_session?: M3Session;
+}
+export interface M3ReplayAudit { schema_version: "saferoute-m3-replay-history/1"; session_id: string; history: M3ReplayReceipt[] }
+export interface M3ReplayMutationView { schema_version: "saferoute-m3-replay-view/1"; receipt: M3ReplayReceipt; execution_view: M3ExecutionView }
+export interface ApplyEventRequest { request_id: string; expected_revision: { head_version: string; generation: string } }
+export interface ReplayStepRequest extends ApplyEventRequest { target_time?: string | null }
 export interface M3Vehicle {
   vehicle_id: string;
   availability: "AVAILABLE" | "UNAVAILABLE";

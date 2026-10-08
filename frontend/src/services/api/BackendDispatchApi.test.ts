@@ -41,6 +41,8 @@ function server() {
       : path.endsWith("/load") ? { schema_version: "saferoute-m3-loaded-session/1", session: { session_id: basis.session_id,
           scenario_id: path.split("/")[3], build_sha256: basis.build_sha256, catalog_sha256: "c".repeat(64), fixture_sha256: "f".repeat(64) }, execution_view: state }
       : path.endsWith("/acceptances") ? { schema_version: "saferoute-m3-acceptance-audit/1", session_id: basis.session_id, acceptances: [] }
+      : path.endsWith("/events") ? { schema_version: "saferoute-m3-pending-events/1", basis: state.basis, current_time: state.current_time, execution_mode: "SIMULATED_REPLAY", real_world_observation: false, events: [] }
+      : path.endsWith("/replay/history") ? { schema_version: "saferoute-m3-replay-history/1", session_id: basis.session_id, history: [] }
       : path.endsWith("/orders") ? orders : path.endsWith("/vehicles") ? vehicles : path.endsWith("/locations") ? locations : state;
     return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", status: "OK", request_id: "trace-1", data, diagnostics: [] }));
   };
@@ -113,6 +115,193 @@ async function acceptHarness() {
     lose: () => { loseReply = true; }, stale: () => { staleOnPost = true; }, hold: (promise: Promise<void>) => { holdReply = promise; },
     unknown: (value: boolean) => { loseBeforeCommit = value; }, reject: (status: number, code: string) => { rejection = { status, code }; } };
 }
+
+async function eventHarness(scenario: "S1" | "S2" | "S3" | "S4" = "S2") {
+  const s = server();
+  const event = { event_id: `wire-${scenario}`, event_type: scenario === "S3" ? "VEHICLE_UNAVAILABLE" : scenario === "S4" ? "LOCAL_RAIN_WHAT_IF" : "URGENT_ORDER",
+    timestamp: "2026-09-27T21:15:00+07:00", apply_allowed: false };
+  const pending = scenario === "S1" ? [] : [event];
+  Object.assign(s.state, { pending_event_ids: pending.map(e => e.event_id) });
+  const receipts: Record<string, unknown>[] = [], posts: { path: string; body: Record<string, unknown> }[] = [];
+  const replies = new Map<string, Record<string, unknown>>();
+  let preview = comparison(), compareCount = 0;
+  const comparePosts: Record<string, unknown>[] = [];
+  function bindPreview() {
+    preview = comparison(); preview.session_id = s.state.basis.session_id;
+    preview.comparison_id = `event-comparison-${compareCount}`; preview.input_basis = structuredClone(s.state.basis);
+    preview.jobs.forEach(row => { row.job_id = `event-${compareCount}-${row.profile}`; row.view.job_id = row.job_id;
+      row.view.input_basis = structuredClone(preview.input_basis); row.view.served_orders = ["M3-O1"]; });
+    preview.outcome.comparison.jobs.forEach(row => { row.job_id = `event-${compareCount}-${row.profile}`; row.basis = structuredClone(preview.input_basis); });
+  }
+  let loseReply = false, rejectCode: string | undefined, wrongBasis = false, corruptReply = false;
+  function sync() {
+    s.orders.basis = s.vehicles.basis = s.locations.basis = s.state.basis;
+    s.orders.current_time = s.vehicles.current_time = s.locations.current_time = s.state.current_time;
+  }
+  function barrier(observed: boolean) {
+    s.state.current_time = event.timestamp;
+    Object.assign(s.state, { observed_metrics: observed ? { distance_m: 0 } : null });
+    event.apply_allowed = observed; sync();
+  }
+  function receipt() {
+    return { schema_version: "saferoute-m3-replay-receipt/1", mutation_id: "event-mutation-1", session_id: s.state.basis.session_id,
+      operation: "apply_event", status: "APPLIED", source: "M2_PUBLIC_SDK", input_basis: structuredClone(s.state.basis),
+      basis: { ...s.state.basis, head_version: "3", head_sha256: "4".repeat(64), overlay_sha256: scenario === "S4" ? "e".repeat(64) : null },
+      event_id: event.event_id, event_type: event.event_type, event_sha256: "e".repeat(64), recorded_at: "2026-10-08T00:00:00+07:00",
+      links: { state: `/api/sessions/${s.state.basis.session_id}/state`, history: `/api/sessions/${s.state.basis.session_id}/replay/history` } };
+  }
+  const fetcher: typeof fetch = async (url, options) => {
+    const path = new URL(String(url)).pathname;
+    let data: unknown;
+    if (path.endsWith("/profiles/compare")) {
+      comparePosts.push(JSON.parse(String(options!.body))); compareCount++; bindPreview();
+      data = { schema_version: "saferoute-m3-profile-submission/1", session_id: preview.session_id, comparison_id: preview.comparison_id,
+        mode: "NEW_BATCH", input_basis: preview.input_basis, profiles: ["FASTEST", "BALANCED", "SAFER"], links: preview.links };
+    } else if (path.includes("/profiles/comparisons/")) data = preview;
+    else if (path.endsWith("/forecast")) {
+      const row = preview.jobs.find(row => row.job_id === path.split("/").at(-2))!;
+      const f = forecastView(); f.session_id = preview.session_id; f.job_id = row.job_id; f.profile = row.profile;
+      f.input_basis = structuredClone(preview.input_basis); f.job_view = row.view;
+      f.trajectory.job_id = row.job_id; f.trajectory.profile = row.profile;
+      const route = (f.trajectory.vehicle_routes as Array<{ vehicle_id: string; order_sequence: string[]; actions: Record<string, unknown>[] }>)[0];
+      route.vehicle_id = "M3-V1"; route.order_sequence = ["M3-O1"];
+      route.actions.push({ kind: "SERVICE", start_us: "2000000", end_us: "2000000", order_id: "M3-O1", node_id: 2, load_after_kg: 0 }); data = f;
+    } else if (path.endsWith("/events")) data = { schema_version: "saferoute-m3-pending-events/1", basis: { ...s.state.basis, ...(wrongBasis ? { generation: "7" } : {}) },
+      current_time: s.state.current_time, execution_mode: "SIMULATED_REPLAY", real_world_observation: false, events: pending };
+    else if (path.endsWith("/replay/history")) data = { schema_version: "saferoute-m3-replay-history/1", session_id: s.state.basis.session_id, history: receipts };
+    else if (path.endsWith("/apply")) {
+      const body = JSON.parse(String(options!.body)); posts.push({ path, body });
+      const code = rejectCode ?? (!replies.has(body.request_id) && !pending.length ? "EVENT_ALREADY_APPLIED" : undefined);
+      if (code) return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", status: "ERROR", request_id: "trace-event", data: null,
+        diagnostics: [{ severity: "ERROR", code, path: "event_id", message: "Server event conflict" }] }), { status: 409 });
+      if (!replies.has(body.request_id)) {
+        const r = receipt(); replies.set(body.request_id, r); receipts.unshift(r);
+        Object.assign(s.state.basis, r.basis); pending.splice(0); s.state.pending_event_ids = [];
+        if (scenario === "S2") {
+          s.state.order_ids.push("WIRE-URGENT"); s.state.unserved.push({ order_id: "WIRE-URGENT", reason: "NO_ACCEPTED_PLAN" });
+          s.orders.orders.push({ ...s.orders.orders[0], order_id: "WIRE-URGENT", priority: 3 });
+          s.locations.locations.push({ location_id: "delivery:WIRE-URGENT", kind: "DELIVERY", order_id: "WIRE-URGENT", graph_node_id: "9007199254740993", coordinates: [106.73, 10.83] });
+        } else if (scenario === "S3") Object.assign(s.state.vehicles[0], { availability: "UNAVAILABLE", activity: "IMMOBILIZED" });
+        sync();
+      }
+      if (loseReply) { loseReply = false; throw new TypeError("Reply lost after event commit"); }
+      data = { schema_version: "saferoute-m3-replay-view/1", receipt: replies.get(body.request_id), execution_view: s.state };
+      if (corruptReply) data = { ...(data as Record<string, unknown>), receipt: { ...replies.get(body.request_id), event_type: "VEHICLE_UNAVAILABLE" } };
+    } else if (path === `/api/sessions/${s.state.basis.session_id}`) data = { session_id: s.state.basis.session_id, scenario_id: scenario, build_sha256: s.state.basis.build_sha256, catalog_sha256: "c".repeat(64), fixture_sha256: "f".repeat(64) };
+    else if (path === "/api/scenarios") {
+      const response = await s.fetcher(url, options); const envelope = await response.json();
+      envelope.data.scenarios = ["S0", "S1", "S2", "S3", "S4"].map(scenario_id => ({ scenario_id, fixture_sha256: "f".repeat(64), initial_time: s.state.current_time, order_count: 1, vehicle_count: 1 }));
+      return new Response(JSON.stringify(envelope));
+    } else return s.fetcher(url, options);
+    return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", status: "OK", request_id: "trace-event", data, diagnostics: [] }));
+  };
+  const client = new Member3Client({ fetch: fetcher, token: () => "test-only-bearer" });
+  const api = new BackendDispatchApi({ client, storage: s.storage }); await api.loadScenario(scenario);
+  return { ...s, api, client, event, pending, receipts, posts, barrier, sync, receipt, comparePosts,
+    lose: () => { loseReply = true; }, reject: (code: string) => { rejectCode = code; }, mismatch: () => { wrongBasis = true; }, corrupt: (value: boolean) => { corruptReply = value; } };
+}
+
+describe("BackendDispatchApi Phase 5", () => {
+  it("invalidates old forecasts and re-optimizes using the new full rain basis", async () => {
+    const h = await eventHarness("S4"); await h.api.optimize();
+    const before = await h.api.getSnapshot(); expect(before.planState.proposedAlternatives).toHaveLength(3);
+    await h.api.selectAlternative(before.planState.proposedAlternatives[0].id);
+    h.barrier(true); await h.api.getSnapshot();
+    const applied = await h.api.triggerFixtureEvent(h.event.event_id);
+    expect(applied.planState.proposedAlternatives).toEqual([]); expect(applied.planState.selectedAlternativeId).toBeNull();
+    await h.api.optimize(); const next = await h.api.getSnapshot();
+    expect(h.comparePosts[1].expected_revision).toEqual({ head_version: "3", generation: "0" });
+    expect(next.backend!.comparison!.input_basis).toEqual(h.state.basis);
+    expect(next.backend!.comparison!.input_basis).not.toEqual(before.backend!.comparison!.input_basis);
+    expect(next.planState.proposedAlternatives).toHaveLength(3);
+    expect(next.planState.proposedAlternatives.every(p => p.origin?.kind === "MEMBER3" && p.origin.inputBasis.overlay_sha256 === "e".repeat(64))).toBe(true);
+  });
+  it("coalesces simultaneous Apply calls into one durable command", async () => {
+    const h = await eventHarness(); h.barrier(true); await h.api.getSnapshot();
+    const first = h.api.triggerFixtureEvent(h.event.event_id), second = h.api.triggerFixtureEvent(h.event.event_id);
+    await Promise.all([first, second]); expect(h.posts).toHaveLength(1); expect(h.receipts).toHaveLength(1);
+  });
+  it("applies_once_then_refreshes from server projections and confirmed history", async () => {
+    const h = await eventHarness(); h.barrier(true); await h.api.getSnapshot();
+    const next = await h.api.triggerFixtureEvent(h.event.event_id).catch(error => error);
+    expect(next.backend?.replayHistory?.history).toEqual(h.receipts);
+    expect(next.decisionState?.orders.map((o: { id: string }) => o.id)).toEqual(["M3-O1", "WIRE-URGENT"]);
+    expect(next.backend?.needsReoptimization).toBe(true);
+    expect(h.posts).toHaveLength(1);
+    expect(h.posts[0].body).toMatchObject({ expected_revision: { head_version: "2", generation: "0" }, request_id: expect.any(String) });
+    expect(Object.keys(h.posts[0].body).sort()).toEqual(["expected_revision", "request_id"]);
+    await expect(h.client.applyEvent(h.state.basis.session_id, h.event.event_id, { request_id: "new-event-intent", expected_revision: { head_version: "3", generation: "0" } })).rejects.toMatchObject({ code: "EVENT_ALREADY_APPLIED" });
+  });
+  it("retries lost Apply with the original identity after another tab changed the session pointer", async () => {
+    const h = await eventHarness(); h.barrier(true); await h.api.getSnapshot(); h.lose();
+    await expect(h.api.triggerFixtureEvent(h.event.event_id)).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+    Object.assign(h.state.basis, { head_version: "4", head_sha256: "5".repeat(64) }); h.sync();
+    const key = [...h.values.keys()].find(k => k.includes("session.v1"))!;
+    const pointer = JSON.parse(h.values.get(key)!); pointer.session.session_id = "other-tab-session"; h.values.set(key, JSON.stringify(pointer));
+    const next = await new BackendDispatchApi({ client: h.client, storage: h.storage }).getSnapshot();
+    expect(h.posts).toHaveLength(2); expect(h.posts[1]).toEqual(h.posts[0]);
+    expect(next.backend!.basis.head_version).toBe("4"); expect(next.backend!.replayHistory!.history[0].basis.head_version).toBe("3");
+    expect(next.decisionState.orders.filter(o => o.id === "WIRE-URGENT")).toHaveLength(1);
+    expect(next.backend!.mutationPending).toBe(false);
+  });
+  it.each(["EVENT_NOT_DUE", "EVENT_ALREADY_APPLIED", "STALE_HEAD", "ACCEPTED_REPLAY_REQUIRED", "EVENT_UNKNOWN", "EVENT_TYPE_UNSUPPORTED", "PLAN_NOT_ACTIVE"])("settles definite %s but preserves its diagnostic without a new Apply", async code => {
+    const h = await eventHarness(); h.barrier(true); await h.api.getSnapshot(); h.reject(code);
+    await expect(h.api.triggerFixtureEvent(h.event.event_id)).rejects.toMatchObject({ code });
+    await h.api.getSnapshot(); await h.api.loadScenario("S0"); expect(h.posts).toHaveLength(1);
+  });
+  it("keeps the original intent on receipt integrity failure and recovers it without duplicating the event", async () => {
+    const h = await eventHarness(); h.barrier(true); await h.api.getSnapshot(); h.corrupt(true);
+    await expect(h.api.triggerFixtureEvent(h.event.event_id)).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+    await expect(h.api.loadScenario("S0")).rejects.toMatchObject({ code: "PENDING_COMMAND" });
+    h.corrupt(false); const next = await h.api.getSnapshot();
+    expect(h.posts).toHaveLength(2); expect(h.posts[1]).toEqual(h.posts[0]); expect(h.receipts).toHaveLength(1);
+    expect(next.backend!.mutationPending).toBe(false);
+  });
+  it("preserves S3 onboard ownership and delivered prefix through Apply", async () => {
+    const h = await eventHarness("S3"); h.barrier(true);
+    h.state.vehicles[0].onboard_order_ids = ["M3-O1"]; h.state.vehicles[0].current_load_kg = 7;
+    h.orders.orders[0].status = "ONBOARD"; h.orders.orders[0].owner_vehicle_id = "M3-V1";
+    const before = structuredClone(h.state.vehicles[0]); await h.api.getSnapshot();
+    const next = await h.api.triggerFixtureEvent(h.event.event_id).catch(error => error);
+    expect(next.decisionState?.vehicles[0]).toMatchObject({ availability: "UNAVAILABLE", currentLoadKg: 7, onboardOrderIds: ["M3-O1"] });
+    expect(next.decisionState?.orders[0]).toMatchObject({ status: "ONBOARD", assignedVehicleId: "M3-V1" });
+    expect(h.state.vehicles[0].position).toEqual(before.position); expect(h.state.delivered_prefix).toEqual([]);
+  });
+  it("does not fabricate rain geometry or erase the server overlay when server time passes the rain window", async () => {
+    const h = await eventHarness("S4"); h.barrier(true); await h.api.getSnapshot();
+    const applied = await h.api.triggerFixtureEvent(h.event.event_id).catch(error => error);
+    expect(applied.backend?.basis.overlay_sha256).toBe("e".repeat(64));
+    h.state.current_time = "2026-09-27T23:00:00+07:00"; h.sync();
+    const next = await h.api.getSnapshot();
+    expect(next.decisionState.context.rain).toBeNull(); expect(next.backend!.basis.overlay_sha256).toBe("e".repeat(64));
+    expect(next.demoClock.now).toBe("2026-09-27T23:00:00+07:00");
+  });
+  it("does not invent an applied transition when an event disappears from capped history", async () => {
+    const h = await eventHarness(); h.pending.splice(0); h.state.pending_event_ids = [];
+    const next = await h.api.getSnapshot();
+    expect(next.backend?.replayHistory?.history).toEqual([]); expect(next.decisionState.events).toEqual([]);
+  });
+  it("event_is_not_due_until_observed_exact_barrier", async () => {
+    const h = await eventHarness();
+    expect((await h.api.getSnapshot()).backend!.pendingEvents?.events[0]?.apply_allowed).toBe(false);
+    h.barrier(false);
+    expect((await h.api.getSnapshot()).backend!.pendingEvents?.events[0]?.apply_allowed).toBe(false);
+    h.barrier(true);
+    expect((await h.api.getSnapshot()).backend!.pendingEvents?.events[0]?.apply_allowed).toBe(true);
+    expect((await h.api.capabilities()).applyEvent).toBe(true);
+    expect(h.posts).toEqual([]);
+  });
+  it("reads only native events and does not invent S1 fixture events or rain polygons", async () => {
+    const h = await eventHarness("S1"); const snapshot = await h.api.getSnapshot();
+    expect(snapshot.backend!.pendingEvents?.events).toEqual([]);
+    expect(snapshot.decisionState.events).toEqual([]); expect(snapshot.decisionState.context.rain).toBeNull();
+  });
+  it("fails closed when event metadata differs from the coherent full basis", async () => {
+    const h = await eventHarness(); h.mismatch();
+    await expect(h.api.getSnapshot()).rejects.toMatchObject({ code: "STATE_CHANGED" });
+    expect(h.posts).toEqual([]);
+  });
+});
 
 describe("BackendDispatchApi Phase 4", () => {
   it("keeps distinct durable intents when tabs inherit an identical sessionStorage identity", async () => {
@@ -460,7 +649,8 @@ describe("BackendDispatchApi foundation", () => {
     expect(scene.proposed).toEqual([]);
     expect(snapshots).toHaveLength(1);
     expect(s.requests.map((item) => item.path)).toEqual(["/ready", "/api/runtime/capabilities", "/api/scenarios", "/api/scenarios/S1/load",
-      "/api/sessions/m3-owned-session/state", "/api/sessions/m3-owned-session/orders", "/api/sessions/m3-owned-session/vehicles", "/api/sessions/m3-owned-session/locations", "/api/sessions/m3-owned-session/acceptances"]);
+      "/api/sessions/m3-owned-session/state", "/api/sessions/m3-owned-session/orders", "/api/sessions/m3-owned-session/vehicles", "/api/sessions/m3-owned-session/locations",
+      "/api/sessions/m3-owned-session/events", "/api/sessions/m3-owned-session/replay/history", "/api/sessions/m3-owned-session/acceptances"]);
   });
 
   it("refresh re-reads the saved M3 pointer and ignores poisoned mock authority", async () => {
@@ -539,12 +729,12 @@ describe("BackendDispatchApi foundation", () => {
     await expect(new BackendDispatchApi({ client: s.client, storage: s.storage }).loadScenario("S1")).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
   });
 
-  it("refuses Phase 2 actions without performing HTTP mutations", async () => {
+  it("refuses unsupported manual physics/replay controls without HTTP mutations", async () => {
     const s = server();
     const api = new BackendDispatchApi({ client: s.client, storage: s.storage });
     await expect(api.selectAlternative("x")).rejects.toMatchObject({ code: "PREVIEW_UNAVAILABLE" });
     await expect(api.acceptSelectedPlan()).rejects.toMatchObject({ code: "ACCEPT_UNAVAILABLE" });
-    for (const action of [() => api.triggerFixtureEvent("x"),
+    for (const action of [
       () => api.setUrgentOrderEnabled(true), () => api.pickupOrder({ vehicleId: "v", orderId: "o" }), () => api.deliverOrder({ vehicleId: "v", orderId: "o" }),
       () => api.advanceDemoClock(10), () => api.resetDemoSession()]) {
       await expect(action()).rejects.toMatchObject({ code: "PHASE_NOT_SUPPORTED" });

@@ -168,6 +168,9 @@ export interface DispatchSnapshot {
     mutationPending?: boolean;
     /** Confirmed historical metadata; active geometry comes from executionView. */
     acceptances?: import("../../integrations/member3/types").M3AcceptanceReceipt[];
+    pendingEvents?: import("../../integrations/member3/types").M3PendingEventsView;
+    replayHistory?: import("../../integrations/member3/types").M3ReplayAudit;
+    needsReoptimization?: boolean;
     error?: { code: string; message: string };
   };
   decisionState: DecisionState;

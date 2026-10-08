@@ -1,5 +1,5 @@
 import { Member3Error } from "./errors";
-export interface PendingCommand { requestId: string; sessionId: string | null; operation: string; resourceId?: string; body: Record<string, unknown>; inputBasis?: import("./types").M3Basis }
+export interface PendingCommand { requestId: string; sessionId: string | null; operation: string; resourceId?: string; body: Record<string, unknown>; inputBasis?: import("./types").M3Basis; eventType?: import("./types").M3EventType }
 export interface PendingCommandStore { begin(intent: Omit<PendingCommand, "requestId">): PendingCommand; read(): PendingCommand | null; complete(requestId: string): void }
 export interface CommandStorage { getItem(key: string): string | null; setItem(key: string, value: string): void }
 export function createPendingCommandStore(storage: CommandStorage | undefined, origin: string): PendingCommandStore {

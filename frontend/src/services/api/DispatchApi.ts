@@ -10,6 +10,7 @@ export interface DispatchApi {
   optimize(): Promise<DispatchSnapshot>;
   selectAlternative(planId: string): Promise<DispatchSnapshot>;
   acceptSelectedPlan(): Promise<DispatchSnapshot>;
+  applyEvent?(eventId: string): Promise<DispatchSnapshot>;
   triggerFixtureEvent(eventId: string): Promise<DispatchSnapshot>;
   setUrgentOrderEnabled(enabled: boolean): Promise<DispatchSnapshot>;
   pickupOrder(input: { vehicleId: string; orderId: string }): Promise<DispatchSnapshot>;
