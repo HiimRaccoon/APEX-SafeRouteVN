@@ -7,6 +7,10 @@ Driver reads accepted execution and controls server replay. Both tabs refresh
 the same owned server session; local storage holds references, command identities
 and UI preferences.
 
+For a fresh clone, follow [clone and UI startup](docs/clone-and-run.md).
+The current slow startup / Optimize refresh issue is documented in
+[the 2026-10-08 diagnostic handoff](docs/runtime-busy-handoff-20261008.md).
+
 The frontend checkout alone is not a native installation. M1 scenarios, the
 locked M2 runtime, M3 source, Python environments and private installation/auth
 configuration must already be available. Use the existing installation; do not
