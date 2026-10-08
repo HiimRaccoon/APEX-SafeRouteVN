@@ -30,3 +30,5 @@ Explicit review boundaries:
 - The existing recovery policy can restore the original session for an explicitly retried ambiguous intent; cross-tab pointer notifications never resubmit it. The pre-existing Phase 5 history-cap presentation limitation remains unchanged.
 
 See [implementation and verification](../../member3-phase6.md) for final functional and native results.
+
+Final acceptance review supplied by the project reviewer on 2026-10-08 for `6332be3c7ee31f24eee91a9fb78f2e3841e49961`: Blocker 0, Important 0, Minor 2; P6-01/P6-02/P6-03 PASS and Phase 6 DONE. The two wording findings were corrected in the follow-up: Admin now describes connected Accept, and recovery session binding uses ?Pending command? for all command kinds. The two affected suites passed 87 tests after these text changes; no authority or replay behavior changed. The existing Phase 5 history-cap limitation remains separately recorded. GitHub statuses/workflow runs were empty at that review; verification remains local/native, without a GitHub CI claim.

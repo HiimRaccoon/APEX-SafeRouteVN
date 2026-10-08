@@ -948,7 +948,7 @@ export function AdminPage() {
 
             {backend && <div className="di-hint-text" role="status">
               {comparison ? `Comparison ${comparison.status} · ${comparison.outcome?.comparison?.status ?? comparison.outcome?.reason ?? "Waiting for server verdict"} · ${sameBasis(comparison.input_basis, backend.basis) ? "CURRENT" : "STALE"}` : "Optimize runs three forecasts through Member 3."}
-              <p>Select a certified current forecast to preview its supplied geometry. Accept is not connected.</p>
+              <p>Select a certified current forecast to preview it. Accept activates the selected current plan.</p>
               <button type="button" className="text-button" disabled={pending} onClick={() => void invoke(() => api.getSnapshot())}>Refresh backend</button>
               {comparisonRunning && api.cancelComparison && <button type="button" className="text-button" disabled={pending || backend.stale} onClick={() => void invoke(() => api.cancelComparison!())}>Cancel comparison</button>}
               {comparison && <p title={comparison.comparison_id}>M3 · {comparison.comparison_id} · head {comparison.input_basis.head_version} / generation {comparison.input_basis.generation}{comparisonCanRank(comparison) ? " · Comparable forecasts" : " · No comparative ranking"}</p>}

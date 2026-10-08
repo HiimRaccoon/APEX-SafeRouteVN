@@ -141,7 +141,7 @@ export class BackendDispatchApi implements DispatchApi {
       // The shared pointer can change in another tab; recover this command's owned session.
       const recovered = await this.client.session(pending.sessionId);
       if (!validSession(recovered) || recovered.session_id !== pending.sessionId || recovered.build_sha256 !== pending.inputBasis?.build_sha256) {
-        throw new Member3Error("INVALID_RESPONSE", "Pending Accept session binding is invalid.");
+        throw new Member3Error("INVALID_RESPONSE", "Pending command session binding is invalid.");
       }
       this.pointer = { schemaVersion: 1, session: recovered };
       this.comparison = undefined; this.forecasts.clear(); this.acceptances = [];
