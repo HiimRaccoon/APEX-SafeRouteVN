@@ -1,20 +1,5 @@
-export interface CustomerPresentation {
-  name: string;
-  phone: string;
-  address: string;
-  timeWindow: string;
-  notes?: string;
-}
-
-export interface DriverPresentation {
-  id: string;
-  name: string;
-  phone: string;
-  vehicleModel: string;
-  licensePlate: string;
-  rating: string;
-  avatar: string;
-}
+import type { CustomerPresentation, DriverPresentation } from "../shared/presentation";
+export type { CustomerPresentation, DriverPresentation } from "../shared/presentation";
 
 const customerCatalog: Record<string, CustomerPresentation> = {
   O001: {

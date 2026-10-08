@@ -3,22 +3,22 @@ import { MockStateEngine } from "./MockStateEngine";
 import { buildPreparedAlternatives } from "./decisionPacks";
 
 describe("prepared decision packs", () => {
-  it("uses certified offline road geometry for the matching initial S0 world", () => {
+  it("uses explicitly schematic lightweight plans for the initial S0 world", () => {
     const engine = new MockStateEngine();
     const alternatives = engine.optimize().planState.proposedAlternatives;
     expect(alternatives).toHaveLength(3);
-    expect(alternatives.every((p) => p.content!.provenance.source === "Member 2 offline runtime")).toBe(true);
-    expect(alternatives.every((p) => p.content!.vehiclePlans.flatMap((v) => v.routeSegments).every((s) => s.geometrySource === "MEMBER2_SUPPLIED"))).toBe(true);
-    expect(alternatives[0].content!.vehiclePlans.flatMap((v) => v.routeSegments).length).toBeGreaterThan(20);
+    expect(alternatives.every((p) => p.content!.provenance.source !== "Member 2 offline runtime")).toBe(true);
+    expect(alternatives.every((p) => p.content!.vehiclePlans.flatMap((v) => v.routeSegments).every((s) => s.geometrySource === "SCHEMATIC_DEMO"))).toBe(true);
+    expect(alternatives[0].content!.vehiclePlans.flatMap((v) => v.routeSegments).length).toBeGreaterThan(0);
   });
 
-  it.each(["S2", "S3", "S4"] as const)("uses the matching initial %s road pack without applying its event", (scenario) => {
+  it.each(["S2", "S3", "S4"] as const)("uses lightweight initial %s plans without applying its event", (scenario) => {
     const engine = new MockStateEngine();
     engine.loadScenario(scenario);
     const snapshot = engine.optimize();
     expect(snapshot.demo.availableEvents[0].status).toBe("READY_TO_TRIGGER");
     expect(snapshot.decisionState.orders).toHaveLength(8);
-    expect(snapshot.planState.proposedAlternatives.every((p) => p.content!.provenance.source === "Member 2 offline runtime")).toBe(true);
+    expect(snapshot.planState.proposedAlternatives.every((p) => p.content!.provenance.source !== "Member 2 offline runtime")).toBe(true);
   });
   it("creates three deterministic proposals without changing a stable world version", () => {
     const engine = new MockStateEngine();
@@ -97,7 +97,7 @@ describe("prepared decision packs", () => {
   it("preserves custody in an S0 to S3 event round after V1 picked up O002", () => {
     const engine = new MockStateEngine();
     const optimized = engine.optimize();
-    engine.selectAlternative(optimized.planState.proposedAlternatives[0].id);
+    engine.selectAlternative(optimized.planState.proposedAlternatives[1].id);
     engine.acceptSelectedPlan();
     engine.pickupOrder({ vehicleId: "V1", orderId: "O002" });
     engine.triggerFixtureEvent("S3-E1");

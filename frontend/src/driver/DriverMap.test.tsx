@@ -1,14 +1,14 @@
+import { tinySuppliedEngine } from "../test/tinySuppliedPlan";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { MockStateEngine } from "../mocks/engine/MockStateEngine";
 import { DriverMap } from "./DriverMap";
 import { createMapScene } from "../shared/components/mapScene";
 import L from "leaflet";
 
 describe("DriverMap", () => {
   it("keeps V2 colors after delivery, dims the completed leg, and never previews unaccepted proposals", () => {
-    const engine = new MockStateEngine();
-    const initial = engine.optimize();
+    const engine = tinySuppliedEngine();
+    const initial = engine.getSnapshot();
     engine.selectAlternative(initial.planState.proposedAlternatives[0].id);
     const accepted = engine.acceptSelectedPlan();
     const vehicle = accepted.planState.acceptedPlans[0].plan.vehiclePlans.find((v) => v.vehicleId === "V2")!;
@@ -34,8 +34,8 @@ describe("DriverMap", () => {
   });
 
   it("uses the same V2 leg colors as Admin, preserving every supplied edge and hiding depot return", () => {
-    const engine = new MockStateEngine();
-    const proposal = engine.optimize().planState.proposedAlternatives[0];
+    const engine = tinySuppliedEngine();
+    const proposal = engine.getSnapshot().planState.proposedAlternatives[0];
     engine.selectAlternative(proposal.id);
     const snapshot = engine.acceptSelectedPlan();
     const before = structuredClone(snapshot);
@@ -59,8 +59,8 @@ describe("DriverMap", () => {
     } finally { spy.mockRestore(); }
   });
   it("dims completed route segments from execution progress", () => {
-    const engine = new MockStateEngine();
-    const optimized = engine.optimize();
+    const engine = tinySuppliedEngine();
+    const optimized = engine.getSnapshot();
     engine.selectAlternative(optimized.planState.proposedAlternatives[0].id);
     const accepted = engine.acceptSelectedPlan();
     const active = accepted.planState.acceptedPlans.find(

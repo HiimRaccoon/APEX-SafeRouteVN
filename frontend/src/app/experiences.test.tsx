@@ -1,3 +1,4 @@
+import { TinySuppliedApi } from "../test/tinySuppliedPlan";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -62,7 +63,7 @@ describe("Admin and Driver experiences", () => {
   });
 
   it("shows the displayed plan's static source forecast separately from the advancing demo clock", async () => {
-    const api = new MockDispatchApi({ storage: new TestStorage() });
+    const api = new TinySuppliedApi({ storage: new TestStorage() });
     const initial = await api.optimize();
     await api.selectAlternative(initial.planState.proposedAlternatives[0].id);
     const { container } = renderExperience("/admin", api);
@@ -73,7 +74,7 @@ describe("Admin and Driver experiences", () => {
   });
   it("keeps Admin routes OFF initially and switches each vehicle independently without persisting or mutating state", async () => {
     const storage = new TestStorage();
-    const api = new MockDispatchApi({ storage });
+    const api = new TinySuppliedApi({ storage });
     const proposals = await api.optimize();
     await api.selectAlternative(proposals.planState.proposedAlternatives[0].id);
     await api.acceptSelectedPlan();
@@ -127,7 +128,7 @@ describe("Admin and Driver experiences", () => {
     await waitFor(() => expect(screen.getByRole("region", { name: "Route visibility" })).toHaveTextContent("Accepted route"));
     assertOff();
     await user.click(v2);
-    expect(container.querySelectorAll(".leaflet-overlay-pane path")).toHaveLength(2);
+    expect(container.querySelectorAll(".leaflet-overlay-pane path")).toHaveLength(1);
     expect(screen.getByRole("region", { name: "Route visibility" })).toHaveTextContent("Accepted route");
     await user.click(screen.getByRole("button", { name: /^optimize$/i }));
     await waitFor(() => expect(screen.getByRole("button", { name: /select balanced/i })).toBeEnabled());
@@ -159,7 +160,7 @@ describe("Admin and Driver experiences", () => {
     await waitFor(() => expect(v2).toHaveAttribute("aria-checked", "false"));
   });
   it("does not invent vehicle ETAs for an offline proposal before Accept", async () => {
-    const api = new MockDispatchApi({ storage: new TestStorage() });
+    const api = new TinySuppliedApi({ storage: new TestStorage() });
     const optimized = await api.optimize();
     await api.selectAlternative(optimized.planState.proposedAlternatives[0].id);
     const { container } = renderExperience("/admin", api);
@@ -169,7 +170,7 @@ describe("Admin and Driver experiences", () => {
     expect(cells.every((cell) => cell.textContent === "—")).toBe(true);
   });
   it("labels fleet travel separately from ETA and never invents offline vehicle arrival times", async () => {
-    const api = new MockDispatchApi({ storage: new TestStorage() });
+    const api = new TinySuppliedApi({ storage: new TestStorage() });
     const optimized = await api.optimize();
     await api.selectAlternative(optimized.planState.proposedAlternatives[0].id);
     await api.acceptSelectedPlan();
@@ -186,7 +187,7 @@ describe("Admin and Driver experiences", () => {
     expect(fastest).not.toHaveTextContent("ETA:");
   });
   it("shows the whole supplied incoming leg in the Driver distance and travel forecast", async () => {
-    const api = new MockDispatchApi({ storage: new TestStorage() });
+    const api = new TinySuppliedApi({ storage: new TestStorage() });
     const optimized = await api.optimize();
     await api.selectAlternative(optimized.planState.proposedAlternatives[0].id);
     const accepted = await api.acceptSelectedPlan();
@@ -194,14 +195,14 @@ describe("Admin and Driver experiences", () => {
     const route = accepted.planState.acceptedPlans[0].plan.vehiclePlans.find((v) => v.vehicleId === "V1")!;
     const stop = route.orderedStops.find((s) => s.kind === "DELIVERY")!;
     const incoming = route.routeSegments.filter((segment) => segment.toStopId === stop.id);
-    expect(incoming.length).toBeGreaterThan(20);
+    expect(incoming.length).toBe(2);
     const { container } = renderExperience("/driver", api);
     await screen.findByRole("button", { name: /delivered/i });
     expect(container.querySelector(".drv-metric-km")).toHaveTextContent(`${incoming.reduce((total, s) => total + s.distanceKm, 0).toFixed(1)} km`);
     expect(container.querySelector(".drv-metric-min")).toHaveTextContent(`${incoming.reduce((total, s) => total + s.durationMinutes, 0).toFixed(1)} min`);
   });
   it("does not subtract schematic fuel estimates from offline route costs", async () => {
-    const api = new MockDispatchApi({ storage: new TestStorage() });
+    const api = new TinySuppliedApi({ storage: new TestStorage() });
     const initial = await api.optimize();
     await api.selectAlternative(initial.planState.proposedAlternatives[0].id);
     await api.acceptSelectedPlan();
@@ -284,11 +285,11 @@ describe("Admin and Driver experiences", () => {
     const fastest = screen.getByText("FASTEST").closest("article");
     expect(fastest).not.toBeNull();
     expect(within(fastest!).getByText(/123K VND/)).toBeInTheDocument();
-    expect(within(fastest!).getByText("2.34")).toBeInTheDocument();
+    expect(within(fastest!).getByText("2.34x")).toBeInTheDocument();
   });
 
   it("does not invent before metrics when no plan has been accepted", async () => {
-    const { user } = renderExperience("/admin");
+    const { user } = renderExperience("/admin", new TinySuppliedApi({ storage: new TestStorage() }));
     await user.click(await screen.findByRole("button", { name: /^optimize$/i }));
     await user.click(screen.getByRole("button", { name: /select fastest/i }));
 
@@ -343,7 +344,7 @@ describe("Admin and Driver experiences", () => {
   it("opens a Driver order using the keyboard", async () => {
     const api = new MockDispatchApi({ storage: new TestStorage() });
     const optimized = await api.optimize();
-    await api.selectAlternative(optimized.planState.proposedAlternatives[0].id);
+    await api.selectAlternative(optimized.planState.proposedAlternatives[1].id);
     await api.acceptSelectedPlan();
     const { user } = renderExperience("/driver", api);
 

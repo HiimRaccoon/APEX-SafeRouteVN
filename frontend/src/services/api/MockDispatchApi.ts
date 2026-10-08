@@ -3,6 +3,8 @@ import type { ScenarioId } from "../../shared/types/scenario";
 import { DispatchError, isDispatchSnapshot, MockStateEngine } from "../../mocks/engine/MockStateEngine";
 import type { DispatchApi } from "./DispatchApi";
 
+import { getCustomerInfo, getDriverInfo, DEPOT_PRESENTATION } from "../../mocks/presentation";
+
 export const MOCK_STORAGE_KEY = "saferoute.phase1.dispatch.v1";
 
 export interface StorageLike {
@@ -36,6 +38,7 @@ function parsePersisted(value: string | null): DispatchSnapshot | null {
 }
 
 export class MockDispatchApi implements DispatchApi {
+  readonly presentation = { demo: true, getCustomerInfo, getDriverInfo, depot: DEPOT_PRESENTATION };
   private engine: MockStateEngine;
   private readonly listeners = new Set<(snapshot: DispatchSnapshot) => void>();
   private readonly storage?: StorageLike;

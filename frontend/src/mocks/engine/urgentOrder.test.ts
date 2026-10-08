@@ -3,7 +3,7 @@ import { MockStateEngine } from "./MockStateEngine";
 
 function accept(engine: MockStateEngine) {
   const proposals = engine.optimize().planState.proposedAlternatives;
-  engine.selectAlternative(proposals[0].id);
+  engine.selectAlternative(proposals[1].id);
   return engine.acceptSelectedPlan();
 }
 
@@ -52,15 +52,15 @@ describe("Urgent Order ON/OFF", () => {
     expect(reloaded.triggerFixtureEvent("S3-E1").demo.availableEvents[1].status).toBe("TRIGGERED");
   });
 
-  it("matches the original road pack after OFF and the urgent world pack after ON without changing supplied geometry", () => {
+  it("restores deterministic lightweight geometry after OFF and ON", () => {
     const engine = new MockStateEngine();
     const initial = engine.optimize().planState.proposedAlternatives.map((proposal) => proposal.content!.vehiclePlans);
     engine.setUrgentOrderEnabled(true);
     const urgent = engine.optimize().planState.proposedAlternatives;
-    expect(urgent.every((proposal) => proposal.content!.provenance.integrationMode === "LOCAL_MANUAL_ANCHOR")).toBe(true);
+    expect(urgent.every((proposal) => proposal.content!.provenance.integrationMode === undefined)).toBe(true);
     engine.setUrgentOrderEnabled(false);
     const restored = engine.optimize().planState.proposedAlternatives;
-    expect(restored.every((proposal) => proposal.content!.provenance.source === "Member 2 offline runtime")).toBe(true);
+    expect(restored.every((proposal) => proposal.content!.provenance.source !== "Member 2 offline runtime")).toBe(true);
     expect(restored.map((proposal) => proposal.content!.vehiclePlans)).toEqual(initial);
     engine.setUrgentOrderEnabled(true);
     expect(engine.optimize().planState.proposedAlternatives.map((proposal) => proposal.content!.vehiclePlans)).toEqual(urgent.map((proposal) => proposal.content!.vehiclePlans));

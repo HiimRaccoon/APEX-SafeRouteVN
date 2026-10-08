@@ -1,3 +1,4 @@
+import { tinySuppliedEngine } from "../test/tinySuppliedPlan";
 import { describe, expect, it } from "vitest";
 import { MockStateEngine } from "../mocks/engine/MockStateEngine";
 import { createAdminMapPresentation } from "./adminMapPresentation";
@@ -8,8 +9,8 @@ import type { MapSegment } from "../shared/components/mapScene";
 import { createMapScene } from "../shared/components/mapScene";
 
 function acceptedS0() {
-  const engine = new MockStateEngine();
-  const optimized = engine.optimize();
+  const engine = tinySuppliedEngine();
+  const optimized = engine.getSnapshot();
   engine.selectAlternative(optimized.planState.proposedAlternatives[0].id);
   return { engine, snapshot: engine.acceptSelectedPlan(), proposal: optimized.planState.proposedAlternatives[0] };
 }

@@ -38,3 +38,5 @@ it("keeps an empty accepted-route view while still showing observed custody afte
   expect(screen.getByText("No dispatch plan has been assigned yet.")).toBeInTheDocument();
   expect(screen.queryByText(/All orders have been delivered/)).not.toBeInTheDocument();
 });
+
+it("uses server IDs/placeholders instead of demo customer and driver identities", async()=>{setup();await screen.findByText("Server time: 2026-09-27T21:12:00+07:00");expect(screen.queryAllByText(/Nguy\u1ec5n V\u0103n A/)).toHaveLength(0);expect(screen.queryAllByText(/Tr\u1ea7n Th\u1ecb Hoa/)).toHaveLength(0);expect(screen.queryAllByText("0912 345 678")).toHaveLength(0);expect(screen.getAllByText(/V1/).length).toBeGreaterThan(0);});

@@ -9,7 +9,12 @@
     "typecheck": "tsc -b --pretty false",
     "test": "vitest",
     "test:run": "vitest run",
-    "lint": "tsc -b --pretty false"
+    "lint": "tsc -b --pretty false",
+    "dev:mock": "vite --mode mock",
+    "build:mock": "tsc -b && vite build --mode mock --outDir dist-mock",
+    "preview": "vite preview",
+    "preview:mock": "vite preview --mode mock --outDir dist-mock",
+    "test:audit": "node --test scripts/audit-backend-build.check.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",

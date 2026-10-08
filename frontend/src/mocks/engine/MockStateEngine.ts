@@ -2,27 +2,9 @@ import { getFixtureScenario } from "../fixtureCatalog";
 import type { DispatchSnapshot, DecisionEvent, DecisionState } from "../../shared/types/dispatch";
 import type { FixtureEvent, ScenarioId } from "../../shared/types/scenario";
 import { buildPreparedAlternatives } from "./decisionPacks";
-import { buildOfflineRoadAlternatives } from "./offlineRoadPlans";
-import { offlineRoadPacks } from "./offlineRoadPackCatalog";
 
-export type DispatchErrorCode =
-  | "EVENT_ALREADY_TRIGGERED"
-  | "EVENT_NOT_READY"
-  | "EVENT_WINDOW_EXPIRED"
-  | "NO_SELECTED_ALTERNATIVE"
-  | "STALE_PROPOSAL"
-  | "NO_ACTIVE_PLAN"
-  | "VEHICLE_UNAVAILABLE"
-  | "INVALID_CURRENT_STOP"
-  | "URGENT_ORDER_NOT_CANCELLABLE"
-  | "INVALID_ORDER_STATE";
-
-export class DispatchError extends Error {
-  constructor(public readonly code: DispatchErrorCode, message: string) {
-    super(message);
-    this.name = "DispatchError";
-  }
-}
+import { DispatchError } from "../../shared/dispatchErrors";
+export { DispatchError, type DispatchErrorCode } from "../../shared/dispatchErrors";
 
 function clone<T>(value: T): T {
   return structuredClone(value);
@@ -78,8 +60,7 @@ export class MockStateEngine {
   optimize(): DispatchSnapshot {
     return this.transaction(() => {
       this.advanceActionClock();
-      this.snapshot.planState.proposedAlternatives = buildOfflineRoadAlternatives(this.snapshot.decisionState, offlineRoadPacks)
-        ?? buildPreparedAlternatives(this.snapshot.decisionState);
+      this.snapshot.planState.proposedAlternatives = buildPreparedAlternatives(this.snapshot.decisionState);
       this.snapshot.planState.selectedAlternativeId = null;
       return this.getSnapshot();
     });

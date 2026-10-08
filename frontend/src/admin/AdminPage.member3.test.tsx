@@ -168,3 +168,5 @@ it("keeps stale or running Optimize disabled and exposes refresh", async () => {
   expect(screen.getByRole("alert")).toHaveTextContent("UNAUTHORIZED");
   expect(screen.getByRole("button", { name: "Refresh backend" })).toBeEnabled();
 });
+
+it("keeps backend customer and driver presentation free of demo identities",async()=>{render(<MemoryRouter initialEntries={["/admin"]}><App api={new BackendView(false,false)} /></MemoryRouter>);await screen.findByRole("button",{name:"Refresh backend"});expect(screen.queryAllByText(/Nguy\u1ec5n V\u0103n Minh/)).toHaveLength(0);expect(screen.queryAllByText(/Nguy\u1ec5n V\u0103n A/)).toHaveLength(0);expect(screen.queryAllByText(/0389 123 456/)).toHaveLength(0);});

@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 import s1Fixture from "../../../../scenarios/fixtures/thu-duc-binh-thanh-v1/S1.json";
-import roadBundle from "../../mocks/data/member2-road-packs.json";
-import { buildOfflineRoadAlternatives, type OfflineRoadBundle } from "../../mocks/engine/offlineRoadPlans";
 import { MOCK_STORAGE_KEY, MockDispatchApi, type StorageLike } from "./MockDispatchApi";
 
 class TestStorage implements StorageLike {
@@ -39,40 +37,22 @@ describe("S1 initial offline roads and dispatch lifecycle", () => {
     } finally { api.dispose(); }
   });
 
-  it("optimizes all three S1 profiles using exact M2 EDGE geometry instead of schematic plans", async () => {
+  it("keeps explicit offline S1 plans lightweight and labels schematic geometry", async () => {
     const api = new MockDispatchApi({ storage: new TestStorage() });
     try {
-      const initial = await api.loadScenario("S1");
-      const bundle = roadBundle as unknown as OfflineRoadBundle;
-      const pack = bundle.packs.find((candidate) => candidate.scenarioId === "S1" && candidate.phase === "INITIAL");
-      expect(pack).toBeDefined();
-      expect(pack!.certified).toBe(true);
-      expect(pack!.initialState).toEqual(s1Fixture.initialState);
-      expect(buildOfflineRoadAlternatives(initial.decisionState, bundle)).not.toBeNull();
+      await api.loadScenario("S1");
       const snapshot = await api.optimize();
-      const proposals = snapshot.planState.proposedAlternatives;
-      expect(proposals.map((proposal) => proposal.content!.profile)).toEqual(["FASTEST", "BALANCED", "SAFER"]);
+      expect(snapshot.planState.proposedAlternatives.map(p => p.content!.profile)).toEqual(["FASTEST", "BALANCED", "SAFER"]);
       expect(snapshot.planState.activeAcceptedPlanId).toBeNull();
-      for (const proposal of proposals) {
-        expect(proposal.content!.provenance).toMatchObject({ source: "Member 2 offline runtime", scenarioId: "S1",
-          buildSha256: "80694f511dc735d0b6a1a0a830edd7f6267df395e87dad0ccf180914b49d5a41" });
-        const witness = pack!.alternatives.find((alternative) => alternative.profile === proposal.content!.profile)!;
-        expect(witness.scenario_id).toBe("S1");
-        expect(["FEASIBLE", "PARTIAL"]).toContain(witness.status);
-        expect([...witness.served_orders, ...witness.unserved_orders.map((order) => order.order_id)].sort()).toEqual([
-          "O001", "O002", "O003", "O004", "O005", "O006", "O007", "O008"
-        ]);
-        expect(proposal.content!.unserved).toEqual(witness.unserved_orders.map((order) => ({ orderId: order.order_id, reason: order.reason })));
-        const segments = proposal.content!.vehiclePlans.flatMap((vehicle) => vehicle.routeSegments);
-        expect(segments.length).toBeGreaterThan(8);
-        expect(segments.every((segment) => segment.geometrySource === "MEMBER2_SUPPLIED")).toBe(true);
-        expect(segments.some((segment) => segment.geometry.coordinates.length > 2)).toBe(true);
-        for (const vehicle of proposal.content!.vehiclePlans) {
-          const source = witness.vehicle_routes.find((route) => route.vehicle_id === vehicle.vehicleId);
-          expect(vehicle.routeSegments.map((segment) => segment.geometry.coordinates)).toEqual(
-            source?.actions.filter((action) => action.kind === "EDGE").map((action) => action.geometry) ?? []);
-          expect(vehicle.suppliedActions).toEqual(source?.actions ?? []);
-        }
+      for (const proposal of snapshot.planState.proposedAlternatives) {
+        const plan = proposal.content!;
+        expect(plan.provenance.source).not.toBe("Member 2 offline runtime");
+        expect(plan.provenance.buildSha256).toBeUndefined();
+        const served = plan.vehiclePlans.flatMap(v => v.orderedStops.filter(s => s.kind === "DELIVERY").flatMap(s => s.orderIds));
+        expect([...served, ...plan.unserved.map(o => o.orderId)].sort()).toEqual(snapshot.decisionState.orders.map(o => o.id).sort());
+        const segments = plan.vehiclePlans.flatMap(v => v.routeSegments);
+        expect(segments.length).toBeGreaterThan(0);
+        expect(segments.every(s => s.geometrySource === "SCHEMATIC_DEMO")).toBe(true);
       }
     } finally { api.dispose(); }
   });

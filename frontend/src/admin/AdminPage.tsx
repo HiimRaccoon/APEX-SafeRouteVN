@@ -20,8 +20,7 @@ import { confirmedEvents } from "../integrations/member3/events";
 import { adminVehicleColor, createAdminMapPresentation } from "./adminMapPresentation";
 import { RouteVisibilityControls } from "./RouteVisibilityControls";
 import type { ImmutablePlanContent, PlanProfile } from "../shared/types/dispatch";
-import { useDispatch } from "../app/DispatchContext";
-import { getCustomerInfo, getDriverInfo } from "../mocks/presentation";
+import { useDispatch, useDispatchPresentation } from "../app/DispatchContext";
 import { LABELS as L } from "./admin.labels";
 import { terminalComparison, comparisonCanRank } from "../integrations/member3/jobViewAdapter";
 import { sameBasis, proposalCurrency, canAcceptSelectedPlan } from "../integrations/member3/revision";
@@ -80,6 +79,7 @@ function ToggleSwitch({
 
 export function AdminPage() {
   const { api, snapshot, pending, error, invoke } = useDispatch();
+  const { getCustomerInfo, getDriverInfo } = useDispatchPresentation();
   const [costWeight, setCostWeight] = useState(30);
   const [punctualityWeight, setPunctualityWeight] = useState(40);
   const [safetyWeight, setSafetyWeight] = useState(30);
@@ -411,7 +411,7 @@ export function AdminPage() {
                 <h2>{L.fleetPreferences}</h2>
               </div>
               <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                <span className="demo-data-badge">Demo data</span>
+                <span className="demo-data-badge">{snapshot.backend ? "Simulated replay" : "Demo data"}</span>
                 <span className="status-chip">
                   {L.availableChip(availableVehiclesCount, totalVehiclesCount)}
                 </span>
@@ -813,7 +813,7 @@ export function AdminPage() {
                 <span className="section-number">④</span>
                 <h2>{L.comparisonTitle}</h2>
               </div>
-              <span className="demo-data-badge">{L.comparisonDemoData}</span>
+              <span className="demo-data-badge">{snapshot.backend ? "Simulated replay" : L.comparisonDemoData}</span>
             </div>
 
             <div className="comparison-table-wrapper">

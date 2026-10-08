@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { MockStateEngine } from "./MockStateEngine";
 
-describe("locally computed manual event forecasts", () => {
-  it("serves all four S0 urgent orders with supplied roads without changing capacity or dispatching", () => {
+describe("lightweight manual event forecasts", () => {
+  it("covers four S0 urgent orders with demo plans without changing capacity or dispatching", () => {
     const engine = new MockStateEngine();
     const initial = engine.optimize();
     engine.selectAlternative(initial.planState.proposedAlternatives[1].id);
@@ -15,15 +15,15 @@ describe("locally computed manual event forecasts", () => {
     expect(proposed.planState.activeAcceptedPlanId).toBe(accepted.planState.activeAcceptedPlanId);
     expect(proposed.planState.acceptedPlans).toEqual(accepted.planState.acceptedPlans);
     for (const proposal of proposed.planState.proposedAlternatives) {
-      expect(proposal.content!.provenance).toMatchObject({ source: "Member 2 offline runtime", integrationMode: "LOCAL_MANUAL_ANCHOR" });
+      expect(proposal.content!.provenance.source).not.toBe("Member 2 offline runtime");
+      expect(proposal.content!.provenance.integrationMode).toBeUndefined();
       expect(proposal.content!.unserved).toEqual([]);
       const deliveries = proposal.content!.vehiclePlans.flatMap((v) => v.orderedStops.filter((s) => s.kind === "DELIVERY").flatMap((s) => s.orderIds));
       expect(deliveries.sort()).toEqual(["O001", "O002", "O003", "O009"]);
       const roads = proposal.content!.vehiclePlans.flatMap((v) => v.routeSegments);
-      expect(roads.length).toBeGreaterThan(20);
-      expect(roads.every((s) => s.geometrySource === "MEMBER2_SUPPLIED")).toBe(true);
+      expect(roads.length).toBeGreaterThan(0);
+      expect(roads.every((s) => s.geometrySource === "SCHEMATIC_DEMO")).toBe(true);
       expect(roads.some((s) => s.geometry.coordinates.length > 2)).toBe(true);
-      expect(proposal.content!.vehiclePlans.every((v) => v.suppliedActions!.filter((a) => a.kind === "PICKUP" || a.kind === "SERVICE").every((a) => (a.load_after_kg ?? 0) <= 15))).toBe(true);
     }
     const again = engine.optimize();
     expect(again.planState.proposedAlternatives).toEqual(proposed.planState.proposedAlternatives);
@@ -34,16 +34,16 @@ describe("locally computed manual event forecasts", () => {
     expect(updated.planState.proposedAlternatives).toEqual([]);
   });
 
-  it("uses S3 roads for available V2 while leaving unavailable V1 custody unchanged", () => {
+  it("keeps unavailable V1 custody out of V2 lightweight plans", () => {
     const engine = new MockStateEngine();
     engine.loadScenario("S3");
     engine.triggerFixtureEvent("S3-E1");
     const before = engine.getSnapshot().decisionState;
     for (const proposal of engine.optimize().planState.proposedAlternatives) {
-      expect(proposal.content!.provenance.integrationMode).toBe("LOCAL_MANUAL_ANCHOR");
+      expect(proposal.content!.provenance.integrationMode).toBeUndefined();
       expect(proposal.content!.vehiclePlans.find((v) => v.vehicleId === "V1")!.routeSegments).toEqual([]);
       expect(proposal.content!.vehiclePlans.find((v) => v.vehicleId === "V2")!.orderedStops.flatMap((s) => s.orderIds)).not.toContain("O001");
-      expect(proposal.content!.unserved).toContainEqual({ orderId: "O001", reason: "CUSTODY_BLOCKED" });
+      expect(proposal.content!.unserved.some(o => o.orderId === "O001")).toBe(true);
     }
     expect(engine.getSnapshot().decisionState).toEqual(before);
   });
@@ -51,21 +51,21 @@ describe("locally computed manual event forecasts", () => {
   it("refuses to reuse an event forecast after physical pickup", () => {
     const engine = new MockStateEngine();
     const initial = engine.optimize();
-    engine.selectAlternative(initial.planState.proposedAlternatives[0].id);
+    engine.selectAlternative(initial.planState.proposedAlternatives[1].id);
     engine.acceptSelectedPlan();
     engine.pickupOrder({ vehicleId: "V1", orderId: "O002" });
     engine.triggerFixtureEvent("S2-E1");
     expect(engine.optimize().planState.proposedAlternatives.every((p) => p.content!.provenance.source !== "Member 2 offline runtime")).toBe(true);
   });
 
-  it.each(["S2", "S4"] as const)("uses a separately bound %s event forecast and invalidates it on expiry", (scenario) => {
+  it.each(["S2", "S4"] as const)("keeps %s demo event forecasts separate from SDK forecasts, including after expiry", (scenario) => {
     const engine = new MockStateEngine();
     engine.loadScenario(scenario);
     engine.triggerFixtureEvent(`${scenario}-E1`);
     const before = engine.getSnapshot().decisionState;
     const next = engine.optimize();
     expect(next.decisionState).toEqual(before);
-    expect(next.planState.proposedAlternatives.every((p) => p.content!.provenance.integrationMode === "LOCAL_MANUAL_ANCHOR")).toBe(true);
+    expect(next.planState.proposedAlternatives.every((p) => p.content!.provenance.integrationMode === undefined)).toBe(true);
     if (scenario === "S4") {
       engine.advanceDemoClock(60);
       expect(engine.optimize().planState.proposedAlternatives.every((p) => p.content!.provenance.source !== "Member 2 offline runtime")).toBe(true);

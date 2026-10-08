@@ -39,6 +39,7 @@ function createSegments(vehicleId: string, stops: VehiclePlan["orderedStops"], p
     geometry: { type: "LineString", coordinates: [...(legs[index] ?? legs.at(-1) ?? [])] },
     distanceKm: Number((profileMetrics[profile].distanceKm / Math.max(1, stops.length - 1)).toFixed(1)),
     durationMinutes: Math.ceil(profileMetrics[profile].durationMinutes / Math.max(1, stops.length - 1)),
+    geometrySource: "SCHEMATIC_DEMO",
     relativeExposure: profileMetrics[profile].exposureScore
   }));
 }

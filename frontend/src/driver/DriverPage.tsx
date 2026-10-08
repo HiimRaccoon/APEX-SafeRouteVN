@@ -1,12 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { useDispatch } from "../app/DispatchContext";
+import { useDispatch, useDispatchPresentation } from "../app/DispatchContext";
 import { DriverMap } from "./DriverMap";
 import { ReplayControls } from "./ReplayControls";
-import {
-  getCustomerInfo,
-  getDriverInfo,
-  DEPOT_PRESENTATION,
-} from "../mocks/presentation";
+import { contactHref } from "../shared/presentation";
 import type { PlanStop, VehiclePlan } from "../shared/types/dispatch";
 import {
   Bell,
@@ -55,6 +51,7 @@ function CurrentStopCard({
   allStopsCount,
   currentStopIndex,
 }: CurrentStopCardProps) {
+  const { getCustomerInfo, getDriverInfo, depot: DEPOT_PRESENTATION, demo: demoPresentation } = useDispatchPresentation();
   if (!stop) {
     return (
       <div className="drv-card drv-card--done" role="status">
@@ -63,7 +60,7 @@ function CurrentStopCard({
         </div>
         <h2 className="drv-card-title drv-done-title">All assigned stops are complete.</h2>
         <p className="drv-done-desc">Great job! All orders have been delivered.</p>
-        <span className="drv-demo-badge">Demo data</span>
+        <span className="drv-demo-badge">{demoPresentation ? "Demo data" : "Simulated replay"}</span>
       </div>
     );
   }
@@ -105,11 +102,11 @@ function CurrentStopCard({
             </div>
             <p className="drv-stop-address">{DEPOT_PRESENTATION.address}</p>
             <div className="drv-meta-row">
-              <a href={`tel:${DEPOT_PRESENTATION.phone}`} className="drv-phone-link">
+              <a href={contactHref(DEPOT_PRESENTATION.phone)} aria-disabled={!contactHref(DEPOT_PRESENTATION.phone)} className="drv-phone-link">
                 <Phone size={13} strokeWidth={2} />
                 <span>{DEPOT_PRESENTATION.phone}</span>
               </a>
-              <span className="drv-demo-badge">Demo data</span>
+              <span className="drv-demo-badge">{demoPresentation ? "Demo data" : "Simulated replay"}</span>
             </div>
           </div>
         </div>
@@ -222,7 +219,7 @@ function CurrentStopCard({
           <p className="drv-stop-address">{info.address}</p>
 
           <div className="drv-meta-row">
-            <a href={`tel:${info.phone}`} className="drv-phone-link">
+            <a href={contactHref(info.phone)} aria-disabled={!contactHref(info.phone)} className="drv-phone-link">
               <Phone size={13} strokeWidth={2} />
               <span>{info.phone}</span>
             </a>
@@ -232,7 +229,7 @@ function CurrentStopCard({
                 <span>{info.timeWindow}</span>
               </span>
             )}
-            <span className="drv-demo-badge">Demo data</span>
+            <span className="drv-demo-badge">{demoPresentation ? "Demo data" : "Simulated replay"}</span>
           </div>
 
           {info.notes && (
@@ -293,6 +290,7 @@ function OrderDetailsModal({
   onClose: () => void;
   snapshot: any;
 }) {
+  const { getCustomerInfo, getDriverInfo, depot: DEPOT_PRESENTATION, demo: demoPresentation } = useDispatchPresentation();
   const info = getCustomerInfo(orderId);
   const order = snapshot.decisionState.orders.find((o: any) => o.id === orderId);
   const isUrgent = (order?.priority ?? 0) >= 3;
@@ -322,7 +320,7 @@ function OrderDetailsModal({
           </div>
           <div className="drv-modal-row">
             <span className="drv-modal-label">Phone</span>
-            <a href={`tel:${info.phone}`} className="drv-phone-link">
+            <a href={contactHref(info.phone)} aria-disabled={!contactHref(info.phone)} className="drv-phone-link">
               <Phone size={13} strokeWidth={2} />
               <span>{info.phone}</span>
             </a>
@@ -352,7 +350,7 @@ function OrderDetailsModal({
             </div>
           )}
           <div className="drv-modal-footer">
-            <span className="drv-demo-badge">Demo data</span>
+            <span className="drv-demo-badge">{demoPresentation ? "Demo data" : "Simulated replay"}</span>
           </div>
         </div>
       </div>
@@ -366,6 +364,8 @@ function OrderDetailsModal({
 
 export function DriverPage() {
   const { api, snapshot, pending, error, invoke } = useDispatch();
+  const { getCustomerInfo, getDriverInfo, depot: DEPOT_PRESENTATION, demo: demoPresentation } = useDispatchPresentation();
+
 
   // Development-only vehicle context; the selected vehicle never mutates world state.
   const [selectedVehicleId, setSelectedVehicleId] = useState("V1");
@@ -642,7 +642,7 @@ export function DriverPage() {
                 </div>
                 <div className="drv-settings-row">
                   <span>Presentation Data</span>
-                  <span className="drv-demo-badge">Demo data</span>
+                  <span className="drv-demo-badge">{demoPresentation ? "Demo data" : "Simulated replay"}</span>
                 </div>
               </div>
 
@@ -671,7 +671,7 @@ export function DriverPage() {
                 <div className="drv-map-caption">
                   <span>Simulated location</span>
                   <span>·</span>
-                  <span className="drv-demo-badge">Demo data</span>
+                  <span className="drv-demo-badge">{demoPresentation ? "Demo data" : "Simulated replay"}</span>
                 </div>
               </div>
             )}
@@ -713,7 +713,7 @@ export function DriverPage() {
                   <p className="drv-empty-desc">
                     You'll be notified when the dispatcher assigns a route.
                   </p>
-                  <span className="drv-demo-badge">Demo data</span>
+                  <span className="drv-demo-badge">{demoPresentation ? "Demo data" : "Simulated replay"}</span>
                 </div>
               ) : (
                 <CurrentStopCard

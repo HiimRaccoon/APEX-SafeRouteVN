@@ -35,7 +35,7 @@ describe("map scene from supplied geometry", () => {
     const accepted = engine.acceptSelectedPlan();
     const depot = accepted.planState.acceptedPlans[0].plan.vehiclePlans[0].orderedStops[0];
     for (const orderId of depot.orderIds) engine.pickupOrder({ vehicleId: "V1", orderId });
-    engine.deliverOrder({ vehicleId: "V1", orderId: "O002" });
+    engine.deliverOrder({ vehicleId: "V1", orderId: "O001" });
     const scene = createMapScene(engine.getSnapshot(), undefined, "V1");
     expect(scene.accepted.every((segment) => segment.vehicleId === "V1")).toBe(true);
     expect(scene.accepted.some((segment) => segment.completed)).toBe(true);

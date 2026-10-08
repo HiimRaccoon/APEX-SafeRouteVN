@@ -1,113 +1,119 @@
-Member 4 ownership — Admin Decision Workspace and Driver Operational Web.
+# SafeRoute VN frontend — Member 4
 
-Phase 1 is a React + TypeScript + Vite demo. It implements `/admin` for the
-dispatcher and `/driver` for the driver, with a shared mock state engine and
-`localStorage` persistence. It uses the pinned Member 1 S0/S1/S2/S3/S4 fixtures.
-Phase 1.5 uses offline Member 2 road routes for the matching initial S0/S1/S2/S3/S4
-worlds. All three profiles were computed and certified with the released runtime.
-Their supplied geometry, assignment and forecast metrics are consumed together.
-Five exact post-event worlds also use locally computed M2 forecasts, with
-independent raw-source validation and a bounded subset candidate policy.
-Unmatched execution worlds fall back to explicitly schematic demo plans.
-The Member 3 backend foundation now supports authenticated readiness, runtime
-capabilities, scenario catalog/load, and current session world reads. Select
-`VITE_DISPATCH_MODE=backend` or `mock`; see [M3 Phase 1](docs/member3-phase1.md).
-Backend Phase 2 now submits real three-profile Optimize comparisons, tracks
-job lifecycle/verdict and supports durable retry/cancel plus bounded polling;
-see [M3 Phase 2](docs/member3-phase2.md). Select/Accept/Event/Pickup/Delivered/Replay
-remain deferred in backend mode. Mock/offline behavior remains unchanged.
-The current migration tracker is [Member 3 integration tasks](../docs/superpowers/plans/2026-10-06-member3-integration/tasks.md).
+React, TypeScript, Vite and Leaflet provide `/admin` and `/driver`. Backend mode
+is the default. Admin submits native Optimize comparisons, previews a selected
+certified current forecast locally, accepts it through M3 and applies due events.
+Driver reads accepted execution and controls server replay. Both tabs refresh
+the same owned server session; local storage holds references, command identities
+and UI preferences.
 
-## Run locally
+The frontend checkout alone is not a native installation. M1 scenarios, the
+locked M2 runtime, M3 source, Python environments and private installation/auth
+configuration must already be available. Use the existing installation; do not
+download or reinstall handoff packages for ordinary frontend startup.
+
+## Start backend and frontend
+
+Run from the source root matching `installation.json.snapshot_root`. For a full
+M3 installation with its own `backend-venv`, the launcher starts one API and one
+worker and waits for readiness:
 
 ```powershell
-cd C:\Users\Windows\Downloads\SafeRoute\frontend
-npm.cmd install
-npm.cmd run dev
+$M3Local = 'C:\path\to\private-native-installation'
+$env:SAFEROUTE_CORS_ORIGINS = 'http://127.0.0.1:5173'
+& "$M3Local\backend-venv\Scripts\python.exe" -B backend/scripts/run_backend.py --local-root $M3Local --port 8000
 ```
 
-Open the URL Vite prints, then use `/admin` or `/driver`. For two-tab sync,
-open one route in each tab of the same browser profile.
+An installation reusing an existing Python environment can run
+`backend/scripts/start_backend.py --port 8000` and `start_worker.py` in separate
+terminals with its configured Python. Both processes need the same private
+`SAFEROUTE_INSTALLATION_CONFIG`, `SAFEROUTE_AUTH_FILE`, `SAFEROUTE_METADATA_DB`
+and `SAFEROUTE_WORKER_HEARTBEAT` paths. Match the frontend origin in CORS and
+confirm `/ready` reports `data.ready=true`; an open port alone is insufficient.
+Keep one worker per authority and preserve existing stores during recovery.
+
+In another terminal:
+
+```powershell
+cd frontend
+npm.cmd ci
+npm.cmd run dev -- --host 127.0.0.1 --port 5173 --strictPort
+```
+
+The non-secret environment example contains only `VITE_DISPATCH_MODE=backend`
+and `VITE_M3_BASE_URL=http://127.0.0.1:8000`. Override the base URL when using
+another API port, including for a build. Check private development overrides
+before starting. Unknown modes show a configuration error.
+
+Configure a private dispatcher credential through the injected M3 token provider
+or the `saferoute.member3.bearer` sessionStorage key **in each tab**. Keep bearer
+values out of Vite variables, source, build output and evidence. There is no
+frontend login or real driver identity assignment in this release; missing
+server contact/identity metadata displays IDs or `Unavailable`.
+
+Open `/admin`, load S0–S4, Optimize, Select and enable the desired route visibility
+switches to preview. Select does not dispatch. Accept activates the current
+certified plan. Open `/driver` in the same browser profile and origin; it uses
+the server session reference and defaults to V1. Step/Play/Speed/Pause use native
+replay; Reset creates a new session while retaining the prior server history.
+Apply becomes available at the server event barrier. Re-Optimize/re-Accept after
+an event. Refresh reads/reconciles the server and retries an unresolved command
+with its original request ID and body.
+
+401/403 require correcting credentials or ownership. Stale proposals require
+refresh and a fresh comparison. BUSY retries are bounded; an ambiguous reply
+does not authorize a new command ID. Schema/binding/authority failures disable
+actions. A browser timeout does not imply server cancellation. Partial/unserved
+native outcomes remain visible, including an immobilized vehicle with no route.
+OSM tile failure preserves supplied EDGE routes. Public rain polygons and
+completed-action mapping remain unavailable.
+
+## Explicit offline demo
+
+```powershell
+npm.cmd run dev:mock
+npm.cmd run build:mock
+npm.cmd run preview:mock -- --host 127.0.0.1 --port 5177 --strictPort
+```
+
+Mock mode remains available through explicit mode or API injection in tests.
+It uses lightweight fixtures, deterministic demo plans and manual pickup/delivery;
+its schematic geometry and demo identities are separate from M3. The former
+heavy road packs and their adapters are removed after the native pre-cleanup
+gate. Historical road-pack reports describe earlier releases, not this offline
+build. The standard backend build has no mock producer or demo catalog chunks;
+use `build:mock` to publish a separate offline artifact.
 
 ## Verify
 
 ```powershell
 npm.cmd run test:run
+npm.cmd run test:audit
 npm.cmd run typecheck
-npm.cmd run lint
 npm.cmd run build
+node scripts/audit-backend-build.mjs
 ```
 
-Demo flow: load S0 → Optimize → Select → Accept → open `/driver`
-→ trigger one event → Re-optimize → Select → Accept. Reset Demo starts a new
-round. Direct S2/S3/S4 loads the fixture initial state and leaves its event
-ready for Dispatcher to trigger.
+The audit checks the actual static/dynamic module and chunk graph, asset inventory
+and emitted file hashes. Native browser gates use the real M3 API/worker/M2 SDK:
+`node docs/evidence/member3-integration/browser.mjs --all`. Set private
+`M3_ACCESS_FILE`, `M3_BASE_URL`, `M3_FRONTEND_URL`, `M3_S4_FIXTURE`,
+`M3_SOURCE_ROOT`, `M3_INSTALLATION_CONFIG` and `M3_OPERATOR_PYTHON`; set
+`M3_PHASE7_STAGE=pre-cleanup` or `post-cleanup`. Use isolated test authority and
+metadata with the verified SDK/environment; the bounded SDK-lock fault operator
+releases its own lock and never repairs or opens the authority store. Post-cleanup
+verification must target the built frontend, using `npm.cmd run preview`.
 
-For a normal eight-order day, use **Context & Events → Demo tools →
-S1 — Normal Delivery Day (8 orders, 2 vehicles)**. Loading starts a clean session
-with V1/V2 at 15 kg each and no events or plans. Optimize supplies FASTEST,
-BALANCED and SAFER from S1's own certified Member 2 initial-world compute;
-enable V1/V2 Route to preview, then Accept to send the plan to Driver.
-All three serve 8/8 orders; BALANCED and SAFER legitimately share a route.
-[S1 source and verification report](docs/s1-support-verification.md) records
-the retained raw jobs, exact EDGE comparison and browser evidence.
+Run explicit mock smoke against the built mock preview with
+`M3_MOCK_FRONTEND_URL` set, then
+`node docs/evidence/member3-integration/phase7-mock-smoke.mjs`.
 
-To see the new road routes after an earlier demo, refresh and **Reset Demo →
-Optimize → Select → Accept**. In Admin's right **Decision Intelligence** panel,
-turn **V1 Route** and/or **V2 Route** ON. Both start OFF on refresh; markers stay
-visible. These view controls never change the plan or Driver state. A valid selected
-proposal previews by itself; otherwise the active accepted route is shown.
-V1 uses blue/cyan legs; V2 uses green for leg 1 and dark green for leg 2.
-The scrollable legend lists leg targets. Both maps hide return-to-depot forecasts
-without modifying the supplied plan. Driver uses the same leg palette as Admin.
-Completed Admin travel is hidden; Driver retains dimmed completed history.
-Existing accepted history is not silently changed.
-S0's three runtime profiles happen to produce identical routes. Offline source
-time is a forecast label; the UI continues to use the deterministic demo clock.
-Absent runtime on-time percentage displays as a dash; runtime total cost is
-route cost, not fuel cost. Manual execution remains a mock lifecycle.
+The current tracker is [integration tasks](../docs/superpowers/plans/2026-10-06-member3-integration/tasks.md),
+with Phase 7 receipts and limits in [Phase 7 handoff](docs/member3-phase7.md).
+Unit/component synthetic HTTP tests are separate from native evidence. Verification
+is local/native; this repository does not claim a GitHub CI run.
 
-Event road demo (trigger before manual Pickup/Delivered):
-
-| Starting world / event | Current exported result, all three profiles |
-| --- | --- |
-| S0 / Urgent Order | 4/4 served, FEASIBLE, capacities remain 15 kg |
-| S0 / Vehicle Unavailable | 3/3 served by available vehicle, FEASIBLE |
-| Direct S2 / Urgent Order | 8/9 served, PARTIAL; O007 unserved |
-| Direct S3 / Vehicle Unavailable | 5/8 served, PARTIAL; O001 remains with unavailable V1 |
-| Direct S4 / Rain | 8/8 served, FEASIBLE |
-| S0 / Rain | Unsupported by M2 pinned S4 rain root; schematic fallback |
-
-Trigger → Re-optimize → select → enable the vehicle routes to preview → Accept.
-Driver receives the new route only after Accept. Every road point comes from M2;
-the frontend neither links stops nor calls a Directions service. These are static
-manual-world forecasts, not authenticated native SDK replay or live solves.
-Source forecast time is shown next to the map title, separately from Demo time.
-Physical pickup/delivery changes require a separately computed matching export;
-do not reuse a pack from a different custody/position/world.
-
-A new/reset S0 round starts with **three orders and Urgent Order OFF**. ON adds
-the fixture urgent order; OFF cancels only that order while it is still waiting.
-After pickup it cannot be switched OFF. A toggle marks the accepted plan stale;
-**Re-optimize → Select → Accept** to update Driver. ON/OFF/ON does not duplicate
-orders. The round remains reserved for this event; Reset or Load Scenario before
-trying a different event. Refresh restores your saved round. To see the clean
-starting screen after an earlier demo, use **Demo tools → Reset Demo** once.
-
-For source hashes, raw certified jobs and offline recomputation commands, see
-[Member 2 runtime](../m2_runtime/README.md). No Python setup is needed to run the
-frontend with the generated asset.
-
-- [Phase 1 design spec](docs/phase-1-design-spec.md)
-- [Phase 1 implementation plan](docs/phase-1-implementation-plan.md)
-- [Phase and task tracker](docs/tasks.md)
-
-## Repository checkout
-
-Keep `frontend/` alongside the repository's pinned Member 1
-`scenarios/fixtures/thu-duc-binh-thanh-v1/` directory. Its S0/S1/S2/S3/S4 JSON files
-are required by the mock fixture adapter. Member 2 execution-view contract tests
-use exact handoff samples pinned in `src/integrations/member2/fixtures/`; a
-separate local Member 2 source checkout is not required to run these tests.
-The fixture README records their origin and SHA-256 hashes. These samples are
-test-only and are not imported by the app.
+This remains `SIMULATED_REPLAY`, with `real_world_observation=false`, proxy exposure
+and certified witnesses that do not establish optimality. There is no GPS/live
+delivery, production calibration or native SLA claim. Manual touch/WebView checks
+and separate deployment/publication approval remain outside the browser gate.

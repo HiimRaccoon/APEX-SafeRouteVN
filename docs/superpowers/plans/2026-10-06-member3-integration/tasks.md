@@ -173,27 +173,27 @@ Progress 2026-10-07: user-authorized public forecast extension M3 0.9.0 implemen
 
 **Dependencies:** P1–P6 và approved P3-01. **Files:** browser harness + `frontend/docs/evidence/member3-integration/` reports/screenshots/public samples, README migration matrix. **Consumes:** integrated backend mode, native API/worker/runtime. **Produces:** pre-cleanup E2E receipt; authorization gate kỹ thuật để xóa heavy packs.
 
-- [ ] Chạy `node docs/evidence/member3-integration/browser.mjs --all` trên real M3/M2, cases S0/S1/S2/S3/S4 + failure matrix của spec; chỉ synthetic HTTP trong unit tests, không E2E claims.
-- [ ] Chạy full `npm.cmd run test:run`, `typecheck`, `build`; responsive 1280/1440 Admin, 360/390/430 Driver, OSM failure giữ routes; touch/WebView chưa chạy ghi pending riêng.
-- [ ] Check evidence secret-free/native flag/IDs/bases/profile/schema/units; verify no offline call backend mode. P7-01 chưa PASS thì không delete packs hoặc claim cutover done.
+- [x] Chạy `node docs/evidence/member3-integration/browser.mjs --all` trên real M3/M2, cases S0/S1/S2/S3/S4 + failure matrix của spec; chỉ synthetic HTTP trong unit tests, không E2E claims.
+- [x] Chạy full `npm.cmd run test:run`, `typecheck`, `build`; responsive 1280/1440 Admin, 360/390/430 Driver, OSM failure giữ routes; touch/WebView chưa chạy ghi pending riêng.
+- [x] Check evidence secret-free/native flag/IDs/bases/profile/schema/units; verify no offline call backend mode. P7-01 chưa PASS thì không delete packs hoặc claim cutover done.
 
 ### P7-02 — Backend default/import isolation/pack cleanup
 
 **Dependencies:** P7-01 PASS. **Files:** new config dispatchMode/shared dispatchErrors/shared presentation/audit script; modify factory→async, Context, env/README, UI mock imports, Mock API/engine wiring; delete 4 heavy files chỉ khi consumer/tests đã chuyển. **Consumes:** baseline E2E approved + lightweight offline behavior. **Produces:** clean backend artifact/default, explicit offline mock entry.
 
-- [ ] Test default backend/invalid mode error/mock explicit/injection; async initialization StrictMode/unmount no duplicate API. FAIL → implement mode config/dynamic mock loader/Context handling.
-- [ ] Test production Context/Admin/Driver errors/presentation do not import mock engine/fixtures; server thiếu customer/driver identity shows ID/placeholder, mock demo labels remain mock only.
-- [ ] Giữ lightweight MockStateEngine/MockDispatchApi/fixtureCatalog/decisionPacks; tháo offlineRoadPlans/catalog wiring. Pack-specific tests chuyển tiny test-only fixtures hoặc retire test chỉ kiểm asset đã bỏ; capacity/custody/geometry regression giữ coverage.
-- [ ] Xóa `frontend/src/mocks/data/member2-road-packs.json`, `member2-event-road-packs.json`, `src/mocks/engine/offlineRoadPlans.ts`, `offlineRoadPackCatalog.ts` khi không còn consumer; no production schematic fallback.
-- [ ] Implement audit actual build modules/chunks/assets (static + dynamic), reject mock-only modules/assets in backend artifact; mock entry explicit build/mode vẫn chạy offline. Targeted/full tests/typecheck/build PASS.
+- [x] Test default backend/invalid mode error/mock explicit/injection; async initialization StrictMode/unmount no duplicate API. FAIL → implement mode config/dynamic mock loader/Context handling.
+- [x] Test production Context/Admin/Driver errors/presentation do not import mock engine/fixtures; server thiếu customer/driver identity shows ID/placeholder, mock demo labels remain mock only.
+- [x] Giữ lightweight MockStateEngine/MockDispatchApi/fixtureCatalog/decisionPacks; tháo offlineRoadPlans/catalog wiring. Pack-specific tests chuyển tiny test-only fixtures hoặc retire test chỉ kiểm asset đã bỏ; capacity/custody/geometry regression giữ coverage.
+- [x] Xóa `frontend/src/mocks/data/member2-road-packs.json`, `member2-event-road-packs.json`, `src/mocks/engine/offlineRoadPlans.ts`, `offlineRoadPackCatalog.ts` khi không còn consumer; no production schematic fallback.
+- [x] Implement audit actual build modules/chunks/assets (static + dynamic), reject mock-only modules/assets in backend artifact; mock entry explicit build/mode vẫn chạy offline. Targeted/full tests/typecheck/build PASS.
 
 ### P7-03 — E2E sau cleanup, artifact/security audit và handoff
 
 **Dependencies:** P7-02. **Files:** final evidence receipts/README/env/task statuses. **Consumes:** production build sau cleanup. **Produces:** final integration acceptance và run instructions.
 
-- [ ] Fresh full tests/typecheck/build; `node scripts/audit-backend-build.mjs` PASS; run native `browser.mjs --all` against built frontend (không chỉ dev source), lưu **post-cleanup** receipt riêng.
-- [ ] Verify browser network/backend artifact no road-pack/mock fixture/engine/schematic; runtime bearer absent source/dist/evidence/staged files; env mẫu chỉ non-secret backend/base URL.
-- [ ] Run explicit mock/offline smoke và unit injection; README startup/auth/session/phase/failure limitations đúng release; không công bố native SLA/GPS/calibration/optimality.
+- [x] Fresh full tests/typecheck/build; `node scripts/audit-backend-build.mjs` PASS; run native `browser.mjs --all` against built frontend (không chỉ dev source), lưu **post-cleanup** receipt riêng.
+- [x] Verify browser network/backend artifact no road-pack/mock fixture/engine/schematic; runtime bearer absent source/dist/evidence/staged files; env mẫu chỉ non-secret backend/base URL.
+- [x] Run explicit mock/offline smoke và unit injection; README startup/auth/session/phase/failure limitations đúng release; không công bố native SLA/GPS/calibration/optimality.
 - [ ] Tick final gate khi every task checked + public forecast contract satisfied + spec E2E matrix evidence đầy đủ. Ghi result counts/paths/commit; residual manual device checks ghi rõ scope, không claim chưa chạy.
 
 ## Evidence index
@@ -207,8 +207,8 @@ Progress 2026-10-07: user-authorized public forecast extension M3 0.9.0 implemen
 | Phase 5 | P5-01/P5-02 PASS; [implementation, native S2/S3/S4 and verification](../../../../frontend/docs/member3-phase5.md). 294 tests/38 files, typecheck/build PASS; native continuations documented. |
 | Phase 6 | P6-01/P6-02/P6-03 PASS; [Driver/replay, two-tab native S0/S2 and verification](../../../../frontend/docs/member3-phase6.md). 327 tests/43 files, typecheck/build PASS; prerequisites and review fixes documented. |
 | Forecast public contract | User-authorized [0.9.0 extension](../../../M3_FORECAST_API_HANDOFF_20261007.md), separate sealed build/receipts from received 0.8.0. |
-| Pre-cleanup E2E / post-cleanup E2E | Chưa chạy; hai receipts riêng bắt buộc, không dùng Foundation receipt thay. |
-| Artifact/import/secret audit | Chưa chạy cho migration đầy đủ; cần backend production build thực tế P7. |
+| Pre-cleanup E2E / post-cleanup E2E | [Pre-cleanup](../../../../frontend/docs/evidence/member3-integration/phase7-pre-cleanup-native.json) and [post-cleanup built native](../../../../frontend/docs/evidence/member3-integration/phase7-post-cleanup-native.json) PASS independently: S0–S4, 25 layouts and 10 native failure branches each. |
+| Artifact/import/secret audit | [Final verification](../../../../frontend/docs/evidence/member3-integration/phase7-final-verification.json), [backend graph audit](../../../../frontend/docs/evidence/member3-integration/phase7-backend-build-audit.json), [secret scan](../../../../frontend/docs/evidence/member3-integration/phase7-final-secret-scan.json) and [explicit offline mock](../../../../frontend/docs/evidence/member3-integration/phase7-mock-smoke.json) PASS. 342 tests/46 files; typecheck/build and 9 audit tests PASS. [Phase 7 handoff](../../../../frontend/docs/member3-phase7.md); fresh review pending. |
 
 Bộ spec/plan/tasks đã viết không đồng nghĩa implementation các tasks chưa tick đã hoàn thành.
 
