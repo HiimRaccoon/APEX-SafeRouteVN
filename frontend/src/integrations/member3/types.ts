@@ -40,6 +40,21 @@ export interface M3ReplayAudit { schema_version: "saferoute-m3-replay-history/1"
 export interface M3ReplayMutationView { schema_version: "saferoute-m3-replay-view/1"; receipt: M3ReplayReceipt; execution_view: M3ExecutionView }
 export interface ApplyEventRequest { request_id: string; expected_revision: { head_version: string; generation: string } }
 export interface ReplayStepRequest extends ApplyEventRequest { target_time?: string | null }
+export type PlaybackSpeed = 1 | 2 | 4 | 8;
+export interface StartPlaybackRequest extends ApplyEventRequest { speed: PlaybackSpeed }
+export interface PlaybackSpeedRequest { request_id: string; speed: PlaybackSpeed }
+export interface M3PlaybackState {
+  mode: "STEP" | "AUTOMATIC"; paused: boolean; fully_paused: boolean; in_flight: boolean;
+  reason: string; speed: PlaybackSpeed; controller_revision: string; next_tick_at: string | null; end_time: string | null;
+  step_seconds: number; cadence: "DISCRETE_BEST_EFFORT"; base_tick_interval_seconds: 1;
+  catch_up: false; auto_apply_event: false; auto_accept_plan: false; execution_mode: "SIMULATED_REPLAY"; real_world_observation: false;
+}
+export interface M3PlaybackView extends M3PlaybackState { schema_version: "saferoute-m3-playback-controller/1"; execution_view: M3ExecutionView }
+export interface M3PlaybackControl {
+  schema_version: "saferoute-m3-playback-control/1"; controller: M3PlaybackState;
+  receipt: { schema_version: "saferoute-m3-playback-receipt/1"; receipt_id: string; session_id: string; operation: "start" | "speed" | "pause"; source: "M3_PLAYBACK_CONTROL"; recorded_at: string; request_id: string; actor_id: string; controller: Omit<M3PlaybackState, "step_seconds" | "cadence" | "base_tick_interval_seconds" | "catch_up" | "auto_apply_event" | "auto_accept_plan" | "execution_mode" | "real_world_observation"> };
+}
+export interface M3ReplayReset { schema_version: "saferoute-m3-replay-reset/1"; source_session_id: string; session: M3Session; receipt: M3ReplayReceipt; execution_view: M3ExecutionView }
 export interface M3Vehicle {
   vehicle_id: string;
   availability: "AVAILABLE" | "UNAVAILABLE";

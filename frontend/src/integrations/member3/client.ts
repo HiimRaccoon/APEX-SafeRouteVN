@@ -4,6 +4,8 @@ import { parseJobForecast } from "./forecastViewAdapter";
 import { parseAcceptanceView, parseAcceptanceAudit } from "./acceptance";
 import { parsePendingEvents } from "./events";
 import { parseReplayAudit, parseReplayMutation } from "./replay";
+import { parsePlayback, parsePlaybackControl, parseReplayReset, validSpeed } from "./playback";
+import type { StartPlaybackRequest, PlaybackSpeedRequest } from "./types";
 import type { ReplayStepRequest, ApplyEventRequest } from "./types";
 import type { AcceptPlanRequest, M3Session } from "./types";
 import type { CompareProfilesRequest, M3ComparisonCancellation } from "./types";
@@ -46,6 +48,23 @@ export class Member3Client {
     const view = parseReplayMutation(await this.request(`/api/sessions/${encodeURIComponent(sid)}/replay/step`, true, body), sid, "advance");
     if (view.receipt.input_basis.head_version !== body.expected_revision.head_version || view.receipt.input_basis.generation !== body.expected_revision.generation) throw new Member3Error("INVALID_RESPONSE", "Replay receipt differs from requested revision.");
     return view;
+  }
+  async playback(sid: string, signal?: AbortSignal) {
+    return parsePlayback(await this.request(`/api/sessions/${encodeURIComponent(sid)}/replay/playback`, true, undefined, signal), sid);
+  }
+  async startPlayback(sid: string, body: StartPlaybackRequest) {
+    if (!validSpeed(body.speed)) throw new Member3Error("INVALID_SPEED", "Playback speed must be 1, 2, 4 or 8.");
+    return parsePlaybackControl(await this.request(`/api/sessions/${encodeURIComponent(sid)}/replay/start`, true, body), sid, "start", body.request_id);
+  }
+  async setPlaybackSpeed(sid: string, body: PlaybackSpeedRequest) {
+    if (!validSpeed(body.speed)) throw new Member3Error("INVALID_SPEED", "Playback speed must be 1, 2, 4 or 8.");
+    return parsePlaybackControl(await this.request(`/api/sessions/${encodeURIComponent(sid)}/replay/speed`, true, body), sid, "speed", body.request_id);
+  }
+  async pausePlayback(sid: string, requestId: string) {
+    return parsePlaybackControl(await this.request(`/api/sessions/${encodeURIComponent(sid)}/replay/playback/pause`, true, { request_id: requestId }), sid, "pause", requestId);
+  }
+  async resetReplay(sid: string, requestId: string) {
+    return parseReplayReset(await this.request(`/api/sessions/${encodeURIComponent(sid)}/replay/reset`, true, { request_id: requestId }), sid);
   }
   async applyEvent(sid: string, eid: string, body: ApplyEventRequest) {
     const view = parseReplayMutation(await this.request(`/api/sessions/${encodeURIComponent(sid)}/events/${encodeURIComponent(eid)}/apply`, true, body), sid, "apply_event", eid);

@@ -10,8 +10,8 @@
 | 2 — Optimize | PASS native S1, 196 tests; 2026-10-07 | String revision + real comparison + lifecycle/polling/error gate. |
 | 3 — Map + KPI | PASS native S1, extension 0.9.0; 234 frontend tests | Certified forecast + accepted geometry + non-null scopes, read-only map/reload/Driver gate PASS. |
 | 4 — Select + Accept | PASS native S1 r2; 260 tests, review fixes verified | Local Select + certified current-basis Accept + server state. |
-| 5 — Event + Re-optimization | Chưa triển khai | Native S2/S3/S4 barrier/apply/re-optimize đúng. |
-| 6 — Driver Execution / Replay | Chưa triển khai | Backend accepted Driver/replay controls + server session cross-tab. |
+| 5 — Event + Re-optimization | PASS native S2/S3/S4; 294 tests, review fixes verified | Native S2/S3/S4 barrier/apply/re-optimize đúng. |
+| 6 — Driver Execution / Replay | PASS native S0/S2; 327 tests, review fixes verified | Backend accepted Driver/replay controls + server session cross-tab. |
 | 7 — Cutover + Cleanup + E2E | Chưa triển khai | E2E trước/sau cleanup, backend default/import graph sạch, mock lightweight chạy. |
 
 ## Cách thực hiện và ghi evidence
@@ -145,27 +145,27 @@ Progress 2026-10-07: user-authorized public forecast extension M3 0.9.0 implemen
 
 **Dependencies:** P4/P5, accepted adapter P3-02. **Files:** DriverPage/shared card/map consumers/executionViewAdapter/capabilities/tests. **Consumes:** current server accepted trajectory/observed prefix/custody. **Produces:** backend Driver render branch giữ shell, no manual physical buttons backend.
 
-- [ ] Test `driver_renders_only_server_accepted_execution`: no accepted empty; proposal selection not driver route; planned deliveries not delivered; observed prefix/current load/onboard/location/time exactly state, absent position timestamp null.
-- [ ] Test backend không gọi pickupOrder/deliverOrder/advanceDemoClock, mock branch giữ controls; dispatcher owner writes/read-only valid owner UI disabled on insufficient capability/error.
-- [ ] FAIL → implement mode-aware Driver/card data; targeted/typecheck/build PASS, visual checks 360/390/430 không overflow.
+- [x] Test `driver_renders_only_server_accepted_execution`: no accepted empty; proposal selection not driver route; planned deliveries not delivered; observed prefix/current load/onboard/location/time exactly state, absent position timestamp null.
+- [x] Test backend không gọi pickupOrder/deliverOrder/advanceDemoClock, mock branch giữ controls; dispatcher owner writes/read-only valid owner UI disabled on insufficient capability/error.
+- [x] FAIL → implement mode-aware Driver/card data; targeted/typecheck/build PASS, visual checks 360/390/430 không overflow.
 
 ### P6-02 — Step/Play/Pause/Speed/Reset qua backend
 
 **Dependencies:** P6-01. **Files:** new Driver `ReplayControls.tsx/.test.tsx`; client/types/API/polling/capabilities, replay API tests/harness. **Consumes:** expectedRevision/PendingCommandStore/server controller. **Produces:** additive replayStep/replayStart/replaySpeed/replayPause/resetSession APIs.
 
-- [ ] Test correct endpoint bodies: step/start expected_revision strings; speed only request_id/speed; Pause `/replay/playback/pause`, not manual `/replay/pause`; 1/2/4/8 accepted, others disabled/rejected.
-- [ ] Test `pause_waits_for_reserved_tick_settlement`: controller may show one settling tick; no invented instant freeze. Speed change paused does not resume. Barrier requires Apply, final-return stop server-owned.
-- [ ] Test reset returns new session pointer, historical old session preserved; late old reply ignored; ambiguous start/step/reset retry same intent/body; accepted required before replay.
-- [ ] FAIL → implement controls/client/controller handling; targeted/full checks PASS; native playback/step/pause/speed/reset evidence và Driver layout preserved.
+- [x] Test correct endpoint bodies: step/start expected_revision strings; speed only request_id/speed; Pause `/replay/playback/pause`, not manual `/replay/pause`; 1/2/4/8 accepted, others disabled/rejected.
+- [x] Test `pause_waits_for_reserved_tick_settlement`: controller may show one settling tick; no invented instant freeze. Speed change paused does not resume. Barrier requires Apply, final-return stop server-owned.
+- [x] Test reset returns new session pointer, historical old session preserved; late old reply ignored; ambiguous start/step/reset retry same intent/body; accepted required before replay.
+- [x] FAIL → implement controls/client/controller handling; targeted/full checks PASS; native playback/step/pause/speed/reset evidence và Driver layout preserved.
 
 ### P6-03 — Admin–Driver cùng server session và polling lifecycle
 
 **Dependencies:** P6-02/P2-03. **Files:** new `sessionReference.ts/.test.ts`; BackendDispatchApi/Context/polling/Driver selectors/browser harness tests. **Consumes:** origin-scoped pointer + fresh reads. **Produces:** cross-tab pointer notification/server convergence, UI-only selected vehicle/visibility preferences.
 
-- [ ] Test pointer storage/events contain no world/orders/plan/progress/token; old Mock key ignored/preserved; two tabs refresh same session, no storage write loops.
-- [ ] Test different origin/unauthorized owner stale pointer cannot load silently; switch/reset abort old coordinator and fetch before enabling actions; hidden tab resume fresh state/no resubmit commands.
-- [ ] FAIL → extract session reference + pointer notifications; targeted/full checks PASS.
-- [ ] Native two-tab Admin Accept/Event/Replay → Driver sees same server basis/time/order states after poll settles; Driver writes under authorized owner → Admin converges. Record no duplicate panel polls/no local physics.
+- [x] Test pointer storage/events contain no world/orders/plan/progress/token; old Mock key ignored/preserved; two tabs refresh same session, no storage write loops.
+- [x] Test different origin/unauthorized owner stale pointer cannot load silently; switch/reset abort old coordinator and fetch before enabling actions; hidden tab resume fresh state/no resubmit commands.
+- [x] FAIL → extract session reference + pointer notifications; targeted/full checks PASS.
+- [x] Native two-tab Admin Accept/Event/Replay → Driver sees same server basis/time/order states after poll settles; Driver writes under authorized owner → Admin converges. Record no duplicate panel polls/no local physics.
 
 ## Phase 7 — Production Cutover + Cleanup + E2E
 
@@ -205,7 +205,7 @@ Progress 2026-10-07: user-authorized public forecast extension M3 0.9.0 implemen
 | Phase 3 | [Native browser/map/scopes](../../../../frontend/docs/evidence/member3-integration/phase3-forecast-browser-native.json), [HTTP/read-only](../../../../frontend/docs/evidence/member3-integration/phase3-forecast-http-native.json), [explicit scopes](../../../../frontend/docs/evidence/member3-integration/phase3-forecast-scopes-http-native.json), [verification](../../../../frontend/docs/evidence/member3-integration/phase3-forecast-verification.json) PASS. 234 frontend/54 SDK/875 backend tests; typecheck/build PASS. |
 | Phase 4 | P4-01/P4-02 PASS; [implementation and receipts](../../../../frontend/docs/member3-phase4.md). |
 | Phase 5 | P5-01/P5-02 PASS; [implementation, native S2/S3/S4 and verification](../../../../frontend/docs/member3-phase5.md). 294 tests/38 files, typecheck/build PASS; native continuations documented. |
-| Phase 6 | Chưa triển khai; Driver Replay controls and cross-tab convergence remain deferred. |
+| Phase 6 | P6-01/P6-02/P6-03 PASS; [Driver/replay, two-tab native S0/S2 and verification](../../../../frontend/docs/member3-phase6.md). 327 tests/43 files, typecheck/build PASS; prerequisites and review fixes documented. |
 | Forecast public contract | User-authorized [0.9.0 extension](../../../M3_FORECAST_API_HANDOFF_20261007.md), separate sealed build/receipts from received 0.8.0. |
 | Pre-cleanup E2E / post-cleanup E2E | Chưa chạy; hai receipts riêng bắt buộc, không dùng Foundation receipt thay. |
 | Artifact/import/secret audit | Chưa chạy cho migration đầy đủ; cần backend production build thực tế P7. |

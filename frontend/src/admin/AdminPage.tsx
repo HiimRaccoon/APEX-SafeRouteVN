@@ -180,7 +180,7 @@ export function AdminPage() {
       : null;
 
   return (
-    <main className="admin-page" data-session-id={snapshot.decisionState.sessionId} data-dispatch-source={snapshot.backend?.source ?? "MOCK"} data-execution-mode={snapshot.backend?.executionMode} data-comparison-id={comparison?.comparison_id} data-comparison-status={comparison?.status}>
+    <main className="admin-page" data-session-id={snapshot.decisionState.sessionId} data-dispatch-source={snapshot.backend?.source ?? "MOCK"} data-execution-mode={snapshot.backend?.executionMode} data-comparison-id={comparison?.comparison_id} data-comparison-status={comparison?.status} data-basis={snapshot.backend ? JSON.stringify(snapshot.backend.basis) : undefined} data-current-time={snapshot.backend?.executionView.current_time} data-active-job-id={snapshot.backend?.executionView.active_job_id ?? undefined} data-stale={snapshot.backend?.stale ? "true" : "false"}>
       <h1 className="sr-only">SafeRoute VN Dispatcher Workspace (Điều phối)</h1>
 
       {/* ── Top Navigation Bar ── */}

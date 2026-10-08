@@ -11,6 +11,11 @@ export interface DispatchApi {
   selectAlternative(planId: string): Promise<DispatchSnapshot>;
   acceptSelectedPlan(): Promise<DispatchSnapshot>;
   applyEvent?(eventId: string): Promise<DispatchSnapshot>;
+  replayStep?(): Promise<DispatchSnapshot>;
+  replayStart?(speed?: 1 | 2 | 4 | 8): Promise<DispatchSnapshot>;
+  replaySpeed?(speed: 1 | 2 | 4 | 8): Promise<DispatchSnapshot>;
+  replayPause?(): Promise<DispatchSnapshot>;
+  resetSession?(): Promise<DispatchSnapshot>;
   triggerFixtureEvent(eventId: string): Promise<DispatchSnapshot>;
   setUrgentOrderEnabled(enabled: boolean): Promise<DispatchSnapshot>;
   pickupOrder(input: { vehicleId: string; orderId: string }): Promise<DispatchSnapshot>;

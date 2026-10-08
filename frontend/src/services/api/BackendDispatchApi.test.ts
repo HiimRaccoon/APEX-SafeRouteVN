@@ -7,6 +7,235 @@ import { comparison } from "../../integrations/member3/testFixtures";
 import { forecastView } from "../../integrations/member3/forecastTestFixture";
 import { canAcceptSelectedPlan } from "../../integrations/member3/revision";
 
+it("bounds forecast hydration to one SDK read at a time while retaining certified alternatives", async () => {
+  const s = await acceptHarness();
+  const read = s.client.jobForecast.bind(s.client);
+  let active = 0, maximum = 0;
+  const observed = vi.spyOn(s.client, "jobForecast").mockImplementation(async (...args) => {
+    active++; maximum = Math.max(maximum, active);
+    try { await new Promise(resolve => setTimeout(resolve, 5)); return await read(...args); }
+    finally { active--; }
+  });
+  const api = new BackendDispatchApi({ client: s.client, storage: s.storage });
+  const next = await api.getSnapshot();
+  expect(observed).toHaveBeenCalledTimes(3);
+  expect(maximum).toBe(1);
+  expect(next.planState.proposedAlternatives).toHaveLength(3);
+});
+it("reenables a tab after a transient observation failure only when a coherent poll succeeds", async () => {
+  vi.useFakeTimers();
+  try {
+    const s = server(); let failNext = false;
+    const client = new Member3Client({ token: () => "unit-only", fetch: async (url, options) => {
+      if (failNext && String(url).endsWith("/state")) {
+        failNext = false;
+        return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", status: "ERROR", request_id: "trace",
+          data: null, diagnostics: [{ code: "RUNTIME_TIMEOUT", path: "runtime", message: "Bounded observation timed out" }] }), { status: 503 });
+      }
+      return s.fetcher(url, options);
+    } });
+    const api = new BackendDispatchApi({ client, storage: s.storage }); await api.loadScenario("S1");
+    const seen: import("../../shared/types/dispatch").DispatchSnapshot[] = [];
+    const stop = api.subscribe(next => seen.push(next)); failNext = true;
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(seen.at(-1)!.backend).toMatchObject({ stale: true, error: { code: "RUNTIME_TIMEOUT" } });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(seen.at(-1)!.backend).toMatchObject({ stale: false, error: undefined, capabilities: { replay: true } });
+    expect(s.requests.filter(r => r.method === "POST")).toHaveLength(1); stop();
+  } finally { vi.useRealTimers(); }
+});
+
+async function playbackHarness() {
+  const s = await acceptHarness(); await s.api.selectAlternative("job-BALANCED"); await s.api.acceptSelectedPlan();
+  const calls: { path: string; body: Record<string, unknown> }[] = [], replies = new Map<string, unknown>();
+  let lost = false, holdReply: Promise<void> | undefined, notify: ((key: string | null) => void) | undefined;
+  const client = new Member3Client({ token: () => "unit-only", fetch: async (url, options) => {
+    const path = new URL(String(url)).pathname;
+    let data: unknown;
+    if (options?.method === "POST" && path.includes("/replay/")) {
+      const body = JSON.parse(String(options.body)); calls.push({ path, body });
+      const operation = path.endsWith("/pause") ? "pause" : path.split("/").at(-1)!;
+      if (!replies.has(body.request_id)) {
+        if (operation === "step" || operation === "reset") {
+          const before = structuredClone(s.state.basis), oldSid = before.session_id;
+          if (operation === "step") {
+            s.state.basis = { ...before, head_version: (BigInt(before.head_version) + 1n).toString(), head_sha256: "e".repeat(64) };
+            s.state.current_time = "2026-09-27T21:14:00+07:00";
+          } else {
+            s.state.basis = { ...before, session_id: "reset-owned", generation: "0", head_version: "0" };
+            s.state.active_job_id = null; s.state.accepted_trajectory = null; s.state.planned_served_suffix = [];
+            s.state.unserved = [{ order_id: "M3-O1", reason: "NO_ACCEPTED_PLAN" }];
+            s.orders.orders[0].planned_in_accepted_suffix = false;
+          }
+          for (const projection of [s.orders, s.vehicles, s.locations]) { projection.basis = s.state.basis; projection.current_time = s.state.current_time; }
+          const next = { session_id: s.state.basis.session_id, scenario_id: "S1", build_sha256: before.build_sha256, catalog_sha256: "c".repeat(64), fixture_sha256: "f".repeat(64) };
+          const receipt = { schema_version: "saferoute-m3-replay-receipt/1", mutation_id: body.request_id, session_id: oldSid, operation: operation === "step" ? "advance" : "reset", status: operation === "step" ? "ADVANCED" : "RESET", source: operation === "step" ? "M2_PUBLIC_SDK" : "M3_NEW_SESSION", input_basis: before, basis: s.state.basis, recorded_at: "2026-10-08T00:00:00Z", links: { state: `/api/sessions/${s.state.basis.session_id}/state`, history: `/api/sessions/${oldSid}/replay/history` }, ...(operation === "step" ? { target_time: s.state.current_time } : { new_session_id: next.session_id, new_session: next }) };
+          data = { schema_version: operation === "step" ? "saferoute-m3-replay-view/1" : "saferoute-m3-replay-reset/1", receipt, execution_view: structuredClone(s.state), ...(operation === "reset" ? { source_session_id: oldSid, session: next } : {}) };
+        } else {
+          if (operation === "start") Object.assign(s.playback, { paused: false, fully_paused: false, mode: "AUTOMATIC", reason: "RUNNING" });
+          if (operation === "pause") Object.assign(s.playback, { paused: true, fully_paused: false, in_flight: true, mode: "STEP", reason: "USER_PAUSE" });
+          if (body.speed) s.playback.speed = body.speed;
+          data = { schema_version: "saferoute-m3-playback-control/1", controller: s.playback, receipt: { schema_version: "saferoute-m3-playback-receipt/1", receipt_id: body.request_id, session_id: s.state.basis.session_id, operation, source: "M3_PLAYBACK_CONTROL", recorded_at: "2026-10-08T00:00:00Z", request_id: body.request_id, actor_id: "owner", controller: s.playback } };
+        }
+        replies.set(body.request_id, structuredClone(data));
+      }
+      data = replies.get(body.request_id);
+      if (lost) { lost = false; throw new TypeError("Reply lost after durable commit"); }
+      await holdReply;
+    } else if (path.endsWith("/acceptances") && s.state.basis.session_id === "reset-owned") data = { schema_version: "saferoute-m3-acceptance-audit/1", session_id: "reset-owned", acceptances: [] };
+    else return s.client.baseUrl && path.endsWith("/replay/playback") ? s.fetcher(url, options) : clientFallback(url, options);
+    return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", status: "OK", request_id: "trace", diagnostics: [], data }));
+  } });
+  // Retain the real test server's comparison and accepted world handlers.
+  const clientFallback: typeof fetch = async (url, options) => {
+    const path = new URL(String(url)).pathname;
+    if (path.includes("/profiles/comparisons/")) return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", status: "OK", request_id: "trace", diagnostics: [], data: s.c }));
+    if (path.endsWith("/forecast")) return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", status: "OK", request_id: "trace", diagnostics: [], data: s.forecasts.find(f => f.job_id === path.split("/").at(-2)) }));
+    return s.fetcher(url, options);
+  };
+  const api = new BackendDispatchApi({ client, storage: s.storage, subscribeChanges: callback => { notify = callback; return () => {}; } }); await api.getSnapshot();
+  return { ...s, api, client, calls, lose: () => { lost = true; }, hold: (promise: Promise<void>) => { holdReply = promise; }, notify: (key: string) => notify!(key) };
+}
+it("ignores a late Reset reply when another tab already switched the session", async () => {
+  const s = await playbackHarness(); let release!: () => void; s.hold(new Promise<void>(r => { release = r; }));
+  const stop = s.api.subscribe(() => {}), reset = s.api.resetSession().catch(e => e);
+  await vi.waitFor(() => expect(s.calls).toHaveLength(1));
+  const key = [...s.values.keys()].find(k => k.includes("session.v1"))!, pointer = JSON.parse(s.values.get(key)!);
+  pointer.session.session_id = "later-owned"; delete pointer.comparison; delete pointer.previewJobId;
+  s.state.basis = { ...s.state.basis, session_id: "later-owned" }; for (const p of [s.orders, s.vehicles, s.locations]) p.basis = s.state.basis;
+  s.storage.setItem(key, JSON.stringify(pointer)); s.notify(key); release();
+  expect(await reset).toMatchObject({ name: "AbortError" });
+  await vi.waitFor(() => expect(JSON.parse(s.values.get(key)!).session.session_id).toBe("later-owned")); stop();
+});
+it("retries an ambiguous Step with the original identity and does not advance twice", async () => {
+  const s = await playbackHarness(); s.lose();
+  await expect(s.api.replayStep()).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+  const next = await s.api.getSnapshot();
+  expect(s.calls).toHaveLength(2); expect(s.calls[0]).toEqual(s.calls[1]);
+  expect(next.backend!.basis.head_version).toBe("9007199254740994");
+  expect(next.demoClock.now).toBe("2026-09-27T21:14:00+07:00");
+});
+it("recovers an ambiguous Start after reload with the original identity and fresh server world", async () => {
+  const s = await playbackHarness(); s.lose();
+  await expect(s.api.replayStart(4)).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+  const reloaded = new BackendDispatchApi({ client: s.client, storage: s.storage });
+  const next = await reloaded.getSnapshot();
+  expect(s.calls).toHaveLength(2); expect(s.calls[1]).toEqual(s.calls[0]);
+  expect(next.backend!.playback).toMatchObject({ paused: false, mode: "AUTOMATIC", speed: 4 });
+  expect(next.backend!.executionView.basis).toEqual(s.state.basis);
+  expect(next.backend!.mutationPending).toBe(false);
+});
+it("Pause exposes the reserved settling tick, blocks Step and speed does not resume", async () => {
+  const s = await playbackHarness(); await s.api.replayStart(4);
+  const paused = await s.api.replayPause(); expect(paused.backend!.playback).toMatchObject({ paused: true, in_flight: true, fully_paused: false });
+  await expect(s.api.replayStep()).rejects.toMatchObject({ code: "REPLAY_UNAVAILABLE" });
+  Object.assign(s.playback, { in_flight: false, fully_paused: true });
+  await s.api.getSnapshot();
+  const next = await s.api.replaySpeed(8); expect(next.backend!.playback).toMatchObject({ paused: true, speed: 8 });
+  expect(s.calls.at(-1)!.body).toEqual({ request_id: expect.any(String), speed: 8 });
+});
+it("sends Pause despite observational churn and settles a confirmed Start before read convergence", async () => {
+  const s = await playbackHarness();
+  s.locations.basis = { ...s.state.basis, generation: "2" };
+  const started = await s.api.replayStart(8).catch(e => e);
+  // Start still requires a coherent input world. Prepare that input first.
+  expect(started).toMatchObject({ code: "STATE_CHANGED" });
+  s.locations.basis = s.state.basis; await s.api.getSnapshot();
+  await s.api.replayStart(8);
+  s.locations.basis = { ...s.state.basis, generation: "2" };
+  await s.api.getSnapshot().catch(() => {});
+  const paused = await s.api.replayPause();
+  expect(s.calls.at(-1)!.path).toMatch(/\/replay\/playback\/pause$/);
+  expect(paused.backend!.playback).toMatchObject({ paused: true, in_flight: true });
+  expect(paused.backend!.mutationPending).toBe(false);
+  expect(paused.backend!.stale).toBe(true);
+});
+it("Reset replays its original ambiguous intent and clears old comparison/accepted pointers", async () => {
+  const s = await playbackHarness(); s.lose();
+  await expect(s.api.resetSession()).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+  const next = await s.api.getSnapshot();
+  expect(s.calls).toHaveLength(2); expect(s.calls[0]).toEqual(s.calls[1]);
+  expect(next.backend!.basis.session_id).toBe("reset-owned");
+  expect(next.planState.acceptedExecution).toBeNull(); expect(next.planState.proposedAlternatives).toEqual([]);
+  expect(next.backend!.comparison).toBeUndefined();
+});
+it("reloads a confirmed Reset through GET only after destination observation fails", async () => {
+  const s = await playbackHarness(), read = s.client.state.bind(s.client);
+  const pointerKey = [...s.values.keys()].find(k => k.includes("session.v1"))!;
+  const originalSession = JSON.parse(s.values.get(pointerKey)!).session;
+  vi.spyOn(s.client, "session").mockResolvedValue(originalSession);
+  let failDestination = true;
+  vi.spyOn(s.client, "state").mockImplementation(async (...args) => {
+    if (args[0] === "reset-owned" && failDestination) { failDestination = false; throw new Error("destination GET unavailable"); }
+    return read(...args);
+  });
+  await expect(s.api.resetSession()).rejects.toThrow("destination GET unavailable");
+  const reloaded = new BackendDispatchApi({ client: s.client, storage: s.storage });
+  const next = await reloaded.getSnapshot();
+  expect(s.calls).toHaveLength(1);
+  expect(next.backend!.basis.session_id).toBe("reset-owned");
+  expect(next.backend!.mutationPending).toBe(false);
+  expect(next.planState.acceptedExecution).toBeNull();
+});
+it("requires accepted execution before replay and rejects invalid speeds without sending", async () => {
+  const s = server(), api = new BackendDispatchApi({ client: s.client, storage: s.storage }); await api.getSnapshot();
+  await expect(api.replayStep()).rejects.toMatchObject({ code: "REPLAY_UNAVAILABLE" });
+  await expect(api.replayStart(3 as 1)).rejects.toMatchObject({ code: "INVALID_SPEED" });
+  expect(s.requests.filter(r => r.method === "POST" && r.path.includes("/replay/"))).toEqual([]);
+});
+
+it("switches cross-tab pointer read-only and fences a late old-session response", async () => {
+  const s = server(); await new BackendDispatchApi({ client: s.client, storage: s.storage }).loadScenario("S1");
+  let notify: ((key: string | null) => void) | undefined, release: (() => void) | undefined, held = false;
+  const client = new Member3Client({ token: () => "unit-only", fetch: async (url, options) => {
+    if (new URL(String(url)).pathname.endsWith("/state") && held) { held = false; const response = await s.fetcher(url, options); await new Promise<void>(r => { release = r; }); return response; }
+    return s.fetcher(url, options);
+  } });
+  const api = new BackendDispatchApi({ client, storage: s.storage, subscribeChanges: callback => { notify = callback; return () => { notify = undefined; }; } });
+  await api.getSnapshot(); const seen: string[] = []; const stop = api.subscribe(next => { if (!next.backend?.stale) seen.push(next.backend!.basis.session_id); });
+  held = true; const oldRead = api.getSnapshot().catch(e => e); await vi.waitFor(() => expect(release).toBeDefined());
+  const key = [...s.values.keys()].find(k => k.includes("session.v1"))!, pointer = JSON.parse(s.values.get(key)!);
+  pointer.session.session_id = "new-tab-owned"; delete pointer.comparison;
+  s.storage.setItem(key, JSON.stringify(pointer));
+  s.state.basis = { ...s.state.basis, session_id: "new-tab-owned" }; for (const p of [s.orders, s.vehicles, s.locations]) p.basis = s.state.basis;
+  notify!(key); release!(); await oldRead;
+  await vi.waitFor(() => expect(seen.at(-1)).toBe("new-tab-owned"));
+  expect(seen).not.toContain("m3-owned-session");
+  expect(s.requests.filter(r => r.method === "POST")).toHaveLength(1);
+  expect(JSON.parse(s.values.get(key)!).session.session_id).toBe("new-tab-owned"); stop();
+});
+it("reconciles a late successful comparison without contaminating the new session", async () => {
+  const s = server(); await new BackendDispatchApi({ client: s.client, storage: s.storage }).loadScenario("S1");
+  let notify!: (key: string | null) => void, release!: () => void;
+  const original = structuredClone(s.state.basis);
+  const client = new Member3Client({ token: () => "unit-only", fetch: async (url, options) => {
+    if (String(url).endsWith('/profiles/compare')) {
+      await new Promise<void>(r => { release = r; });
+      return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", status: "OK", request_id: "trace", diagnostics: [], data: { schema_version: "saferoute-m3-profile-submission/1", session_id: original.session_id, comparison_id: "old-comparison", mode: "NEW_BATCH", input_basis: original, profiles: ["FASTEST", "BALANCED", "SAFER"], links: { poll: `/api/sessions/${original.session_id}/profiles/comparisons/old-comparison`, cancel: `/api/sessions/${original.session_id}/profiles/comparisons/old-comparison/cancel` } } }));
+    }
+    return s.fetcher(url, options);
+  } });
+  const api = new BackendDispatchApi({ client, storage: s.storage, subscribeChanges: callback => { notify = callback; return () => {}; } }); await api.getSnapshot(); const stop = api.subscribe(() => {});
+  const oldSubmit = api.optimize().catch(e => e); await vi.waitFor(() => expect(release).toBeDefined());
+  const key = [...s.values.keys()].find(k => k.includes("session.v1"))!, pointer = JSON.parse(s.values.get(key)!); pointer.session.session_id = "comparison-new";
+  s.state.basis = { ...s.state.basis, session_id: "comparison-new" }; for (const p of [s.orders, s.vehicles, s.locations]) p.basis = s.state.basis;
+  s.storage.setItem(key, JSON.stringify(pointer)); notify(key); release();
+  expect(await oldSubmit).toMatchObject({ name: "AbortError" });
+  const fresh = await api.getSnapshot();
+  expect(fresh.backend).toMatchObject({ basis: { session_id: "comparison-new" }, mutationPending: false, capabilities: { optimize: true } });
+  expect(fresh.backend!.comparison).toBeUndefined(); expect(JSON.parse(s.values.get(key)!).comparison).toBeUndefined(); stop();
+});
+it("does not silently load another world when a cross-tab owner pointer is forbidden", async () => {
+  const s = server(); await new BackendDispatchApi({ client: s.client, storage: s.storage }).loadScenario("S1");
+  let notify: ((key: string | null) => void) | undefined;
+  const client = new Member3Client({ token: () => "unit-only", fetch: async (url, options) => String(url).includes("foreign-owner") ? new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", status: "ERROR", request_id: "trace", data: null, diagnostics: [{ code: "FORBIDDEN", message: "Not session owner" }] }), { status: 403 }) : s.fetcher(url, options) });
+  const api = new BackendDispatchApi({ client, storage: s.storage, subscribeChanges: callback => { notify = callback; return () => {}; } });
+  await api.getSnapshot(); const seen: unknown[] = []; const stop = api.subscribe(next => seen.push(next));
+  const key = [...s.values.keys()].find(k => k.includes("session.v1"))!, pointer = JSON.parse(s.values.get(key)!); pointer.session.session_id = "foreign-owner"; s.storage.setItem(key, JSON.stringify(pointer)); notify!(key);
+  await vi.waitFor(() => expect(seen.at(-1)).toMatchObject({ backend: { stale: true, error: { code: "FORBIDDEN" }, capabilities: { replay: false } } }));
+  expect(s.requests.filter(r => r.method === "POST")).toHaveLength(1); stop();
+});
+
 // Contract-shaped HTTP data, deliberately unrelated to frontend fixture IDs/coordinates.
 function server() {
   const basis = { session_id: "m3-owned-session", build_sha256: "b".repeat(64), head_version: "2", generation: "0",
@@ -32,6 +261,7 @@ function server() {
   ] };
   const requests: { path: string; method: string; body: unknown }[] = [];
   const capabilities = { schema_version: "task02-m2-runtime-capabilities/1", build_sha256: basis.build_sha256 };
+  const playback = { mode: "STEP", paused: true, fully_paused: true, in_flight: false, reason: "NOT_STARTED", speed: 1, controller_revision: "0", next_tick_at: null, end_time: null, step_seconds: 60, cadence: "DISCRETE_BEST_EFFORT", base_tick_interval_seconds: 1, catch_up: false, auto_apply_event: false, auto_accept_plan: false, execution_mode: "SIMULATED_REPLAY", real_world_observation: false };
   const fetcher: typeof fetch = async (url, options) => {
     const path = new URL(String(url)).pathname;
     requests.push({ path, method: options?.method ?? "GET", body: options?.body ? JSON.parse(String(options.body)) : null });
@@ -40,16 +270,17 @@ function server() {
           scenarios: ["S0", "S1"].map((scenario_id) => ({ scenario_id, fixture_sha256: "f".repeat(64), initial_time: time, order_count: 1, vehicle_count: 1 })), catalog_sha256: "c".repeat(64) }
       : path.endsWith("/load") ? { schema_version: "saferoute-m3-loaded-session/1", session: { session_id: basis.session_id,
           scenario_id: path.split("/")[3], build_sha256: basis.build_sha256, catalog_sha256: "c".repeat(64), fixture_sha256: "f".repeat(64) }, execution_view: state }
-      : path.endsWith("/acceptances") ? { schema_version: "saferoute-m3-acceptance-audit/1", session_id: basis.session_id, acceptances: [] }
+      : path.endsWith("/acceptances") ? { schema_version: "saferoute-m3-acceptance-audit/1", session_id: state.basis.session_id, acceptances: [] }
       : path.endsWith("/events") ? { schema_version: "saferoute-m3-pending-events/1", basis: state.basis, current_time: state.current_time, execution_mode: "SIMULATED_REPLAY", real_world_observation: false, events: [] }
-      : path.endsWith("/replay/history") ? { schema_version: "saferoute-m3-replay-history/1", session_id: basis.session_id, history: [] }
+      : path.endsWith("/replay/history") ? { schema_version: "saferoute-m3-replay-history/1", session_id: state.basis.session_id, history: [] }
+      : path.endsWith("/replay/playback") ? { schema_version: "saferoute-m3-playback-controller/1", ...playback, execution_view: state }
       : path.endsWith("/orders") ? orders : path.endsWith("/vehicles") ? vehicles : path.endsWith("/locations") ? locations : state;
     return new Response(JSON.stringify({ schema_version: "saferoute-m3-http-response/1", status: "OK", request_id: "trace-1", data, diagnostics: [] }));
   };
   const values = new Map<string, string>();
   const storage = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); } };
   const client = new Member3Client({ fetch: fetcher, token: () => "test-only-bearer" });
-  return { client, storage, requests, values, state, orders, vehicles, locations, fetcher, capabilities };
+  return { client, storage, requests, values, state, orders, vehicles, locations, fetcher, capabilities, playback };
 }
 
 async function acceptHarness() {
@@ -650,7 +881,7 @@ describe("BackendDispatchApi foundation", () => {
     expect(snapshots).toHaveLength(1);
     expect(s.requests.map((item) => item.path)).toEqual(["/ready", "/api/runtime/capabilities", "/api/scenarios", "/api/scenarios/S1/load",
       "/api/sessions/m3-owned-session/state", "/api/sessions/m3-owned-session/orders", "/api/sessions/m3-owned-session/vehicles", "/api/sessions/m3-owned-session/locations",
-      "/api/sessions/m3-owned-session/events", "/api/sessions/m3-owned-session/replay/history", "/api/sessions/m3-owned-session/acceptances"]);
+      "/api/sessions/m3-owned-session/events", "/api/sessions/m3-owned-session/replay/history", "/api/sessions/m3-owned-session/replay/playback", "/api/sessions/m3-owned-session/acceptances"]);
   });
 
   it("refresh re-reads the saved M3 pointer and ignores poisoned mock authority", async () => {

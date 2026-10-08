@@ -5,6 +5,10 @@ import puppeteer from "puppeteer-core";
 const args = process.argv.slice(2);
 const option = (name, fallback) => { const i = args.indexOf(name); return i < 0 ? fallback : args[i + 1]; };
 const phase = option("--phase", "2"), scenario = option("--scenario", "S1");
+if (phase === "6" && !args.includes("--all")) {
+  await import("./phase6-browser.mjs");
+  process.exit(0);
+}
 if (phase === "5" && !args.includes("--all")) {
   await import("./phase5-browser.mjs");
   process.exit(0);

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useDispatch } from "../app/DispatchContext";
 import { DriverMap } from "./DriverMap";
+import { ReplayControls } from "./ReplayControls";
 import {
   getCustomerInfo,
   getDriverInfo,
@@ -376,6 +377,15 @@ export function DriverPage() {
   const previousPlanId = useRef<string | null | undefined>(undefined);
   const initialSnapshotSeen = useRef(false);
 
+  useEffect(() => {
+    if (!snapshot) return;
+    if (!snapshot.decisionState.vehicles.some(v => v.id === selectedVehicleId)) {
+      setSelectedVehicleId(snapshot.decisionState.vehicles[0]?.id ?? "");
+    }
+    setInspectOrderId(null);
+    setShowUpdateBanner(false);
+  }, [snapshot?.decisionState.sessionId]);
+
   // Banner: show only when activeAcceptedPlanId actually changes after initial mount
   useEffect(() => {
     if (!snapshot) return;
@@ -419,6 +429,7 @@ export function DriverPage() {
   const vehicle = snapshot.decisionState.vehicles.find((v) => v.id === selectedVehicleId);
   const vehicleLocked = vehicle?.availability === "UNAVAILABLE";
   const nativeAccepted = snapshot.backend ? snapshot.planState.acceptedExecution : null;
+  const observedVehicle = snapshot.backend?.executionView.vehicles.find(v => v.vehicle_id === selectedVehicleId);
 
   const progress =
     activePlan && v1Plan
@@ -458,7 +469,7 @@ export function DriverPage() {
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <main className="drv-page">
+    <main className="drv-page" data-session-id={snapshot.decisionState.sessionId} data-dispatch-source={snapshot.backend?.source ?? "MOCK"} data-basis={snapshot.backend ? JSON.stringify(snapshot.backend.basis) : undefined} data-current-time={snapshot.backend?.executionView.current_time} data-active-job-id={snapshot.backend?.executionView.active_job_id ?? undefined} data-stale={snapshot.backend?.stale ? "true" : "false"}>
       <div className="drv-shell">
 
         {/* ── Simulated Phone Status Bar (for desktop shell preview) ─────── */}
@@ -666,6 +677,19 @@ export function DriverPage() {
             )}
 
             {/* Current Stop Card or Empty State */}
+            {snapshot.backend && <ReplayControls api={api} snapshot={snapshot} pending={pending} invoke={invoke} />}
+            {snapshot.backend && <section className="drv-stop-section" aria-label="Server execution">
+              <div className="drv-empty-card">
+                <p>Server time: {snapshot.backend.executionView.current_time}</p>
+                <p>Load: {observedVehicle?.current_load_kg ?? "unavailable"} kg · Onboard: {observedVehicle?.onboard_order_ids.join(", ") || "none"}</p>
+                <p>Delivered prefix: {snapshot.backend.executionView.delivered_prefix.join(", ") || "none"}</p>
+                <p>Position observed: {observedVehicle?.position_timestamp ?? "unavailable"}</p>
+                <p>Location: {observedVehicle?.position.coordinates.join(", ") ?? "unavailable"}</p>
+                <p>Planned suffix: {observedVehicle?.planned_suffix?.join(", ") || "none"}</p>
+                {snapshot.backend.executionView.unserved.length > 0 && <p>Unserved: {snapshot.backend.executionView.unserved.map(o => `${o.order_id} (${o.reason})`).join(", ")}</p>}
+                {error && <p role="alert">{error}</p>}
+              </div>
+            </section>}
             <section
               className="drv-stop-section"
               aria-labelledby="drv-current-stop-heading"
@@ -674,7 +698,7 @@ export function DriverPage() {
                 <div className="drv-empty-card" role="status">
                   <h2 className="drv-empty-title" id="drv-current-stop-heading">Accepted route · {nativeAccepted.profile}</h2>
                   <p className="drv-empty-desc">{nativeAccepted.jobId} · Simulated replay</p>
-                  <p className="drv-empty-desc">Stop operations and completed travel are unavailable until public execution progress is connected.</p>
+                  <p className="drv-empty-desc">Observed progress comes from server replay. Planned deliveries remain forecasts.</p>
                   {!nativeAccepted.vehicleOrderIds[selectedVehicleId] && <p>No assigned continuation for {selectedVehicleId}.</p>}
                 </div>
               ) : !activePlan || !v1Plan || v1Plan.orderedStops.length === 0 ? (

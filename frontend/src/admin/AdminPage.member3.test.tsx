@@ -29,10 +29,11 @@ class BackendView extends MockDispatchApi {
   override async getSnapshot() {
     const s = await super.getSnapshot(); s.decisionState.sessionId = basis.session_id;
     const c = comparison() as M3ComparisonView;
+    const emptyExecution = acceptedView(); emptyExecution.active_job_id = null; emptyExecution.accepted_trajectory = null;
     if (this.metrics) c.outcome!.comparison!.jobs.forEach(j => { j.metrics = { total_distance_m: 2500, total_travel_time_s: 90, total_exposure: 234, total_cost_vnd: 4000 }; });
     if (this.running) { c.status = "RUNNING"; c.outcome = null; c.jobs[0].view = null; }
     s.backend = { source: "MEMBER3_HTTP", baseUrl: "http://127.0.0.1:8000", executionMode: "SIMULATED_REPLAY", realWorldObservation: false,
-      basis, executionView: { observed_metrics: null, planned_suffix_metrics: null, projected_whole_metrics: null } as M3ExecutionView, comparison: c, capabilities: phase2Capabilities(!this.stale), stale: this.stale,
+      basis, executionView: emptyExecution, comparison: c, capabilities: phase2Capabilities(!this.stale), stale: this.stale,
       error: this.stale ? { code: "UNAUTHORIZED", message: "Token expired" } : undefined,
       scenarios: [{ id: "S0", orderCount: 17, vehicleCount: 4, initialTime: "2026-09-27T21:00:00+07:00", fixtureSha256: "a".repeat(64) }] };
     if (this.accepted) {
@@ -123,6 +124,7 @@ it("does not expose unaccepted certified forecasts on Driver", async () => {
 it("renders server lifecycle/verdict without fake metrics, routes or recommendation", async () => {
   render(<MemoryRouter initialEntries={["/admin"]}><App api={new BackendView(false, false)} /></MemoryRouter>);
   expect(await screen.findByText(/Comparison COMPLETED/)).toHaveTextContent("COMPARABLE");
+  expect(JSON.parse(document.querySelector<HTMLElement>(".admin-page")!.dataset.basis!)).toEqual(basis);
   expect(screen.getByRole("option", { name: /17 orders.*4 vehicles/ })).toBeInTheDocument();
   expect(screen.getAllByText(/Certified witness/)).toHaveLength(3);
   expect(screen.queryByText("Recommended")).not.toBeInTheDocument();

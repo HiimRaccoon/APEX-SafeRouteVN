@@ -171,6 +171,9 @@ export interface DispatchSnapshot {
     pendingEvents?: import("../../integrations/member3/types").M3PendingEventsView;
     replayHistory?: import("../../integrations/member3/types").M3ReplayAudit;
     needsReoptimization?: boolean;
+    playback?: import("../../integrations/member3/types").M3PlaybackView;
+    /** Confirmed controller command; physical world still awaits a coherent server read. */
+    playbackConverging?: boolean;
     error?: { code: string; message: string };
   };
   decisionState: DecisionState;

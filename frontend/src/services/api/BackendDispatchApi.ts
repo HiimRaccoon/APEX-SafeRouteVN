@@ -5,17 +5,18 @@ import { adaptJobForecast } from "../../integrations/member3/forecastViewAdapter
 import { sameBasis, expectedRevision, parseBasis, canAcceptSelectedPlan } from "../../integrations/member3/revision";
 import { createPendingCommandStore, type PendingCommand, type PendingCommandStore } from "../../integrations/member3/requestId";
 import { adaptScenarioCatalog, type ScenarioOption } from "../../integrations/member3/scenarioAdapter";
-import { phase2Capabilities } from "../../integrations/member3/capabilities";
+import { phase2Capabilities, canControlPlayback } from "../../integrations/member3/capabilities";
 import { createPollCoordinator, type PollCoordinator, transientM3Error } from "../../integrations/member3/polling";
 import { terminalComparison } from "../../integrations/member3/jobViewAdapter";
 import { mapM3World } from "../../integrations/member3/worldState";
 import { bindPendingEvents, eventType } from "../../integrations/member3/events";
+import { validSpeed } from "../../integrations/member3/playback";
+import type { PlaybackSpeed, M3ReplayReset, M3PlaybackControl, M3ReplayMutationView } from "../../integrations/member3/types";
 import type { DispatchSnapshot } from "../../shared/types/dispatch";
 import type { ScenarioId } from "../../shared/types/scenario";
 import type { DispatchApi } from "./DispatchApi";
 
-interface PointerStorage { getItem(key: string): string | null; setItem(key: string, value: string): void }
-interface SessionPointer { schemaVersion: 1; session?: M3Session; pending?: { scenarioId: ScenarioId; requestId: string }; comparison?: { id: string; inputBasis: M3Basis }; previewJobId?: string }
+import { createSessionReference, validSession, type PointerStorage, type SessionPointer } from "../../integrations/member3/sessionReference";
 function samePublicValue(left: unknown, right: unknown): boolean {
   if (left === right) return true;
   if (Array.isArray(left)) return Array.isArray(right) && left.length === right.length && left.every((value, i) => samePublicValue(value, right[i]));
@@ -25,7 +26,7 @@ function samePublicValue(left: unknown, right: unknown): boolean {
   }
   return false;
 }
-function forecastCapabilities(fresh: boolean) { return { ...phase2Capabilities(fresh), forecastGeometry: fresh, accept: fresh, applyEvent: fresh }; }
+function forecastCapabilities(fresh: boolean) { return { ...phase2Capabilities(fresh), forecastGeometry: fresh, accept: fresh, applyEvent: fresh, replay: fresh }; }
 function browserStorage(): PointerStorage | undefined {
   try { return typeof window === "undefined" ? undefined : window.localStorage; } catch { return undefined; }
 }
@@ -38,18 +39,14 @@ function commandTabId(): string | null | undefined {
     const id = crypto.randomUUID(); window.sessionStorage.setItem(key, id); return id;
   } catch { return null; }
 }
-function validSession(value: unknown): value is M3Session {
-  if (!value || typeof value !== "object") return false;
-  const item = value as Partial<M3Session>;
-  return typeof item.session_id === "string" && item.session_id.length > 0 && /^S[0-4]$/.test(item.scenario_id ?? "") &&
-    [item.build_sha256, item.catalog_sha256, item.fixture_sha256].every((value) => typeof value === "string" && /^[a-f0-9]{64}$/.test(value));
-}
 
 /** Native world authority and forecast job orchestration; never solves or accepts locally. */
 export class BackendDispatchApi implements DispatchApi {
   private readonly client: Member3Client;
   private readonly storage?: PointerStorage;
-  private readonly storageKey: string;
+  private readonly reference: ReturnType<typeof createSessionReference>;
+  private stopReference?: () => void;
+  private sessionEpoch = 0;
   private readonly listeners = new Set<(snapshot: DispatchSnapshot) => void>();
   private pointer: SessionPointer = { schemaVersion: 1 };
   private foundation?: Promise<M3Catalog>;
@@ -69,12 +66,13 @@ export class BackendDispatchApi implements DispatchApi {
   private queuedOperations = 0;
   private acceptFlight?: Promise<DispatchSnapshot>;
   private applyFlight?: { eventId: string; promise: Promise<DispatchSnapshot> };
+  private replayFlight?: { operation: string; speed?: PlaybackSpeed; promise: Promise<DispatchSnapshot> };
   private acceptances: M3AcceptanceReceipt[] = [];
 
-  constructor(options: { client?: Member3Client; storage?: PointerStorage } = {}) {
+  constructor(options: { client?: Member3Client; storage?: PointerStorage; subscribeChanges?(callback: (key: string | null) => void): () => void } = {}) {
     this.client = options.client ?? new Member3Client();
     this.storage = options.storage ?? browserStorage();
-    this.storageKey = `saferoute.member3.session.v1:${this.client.baseUrl}`;
+    this.reference = createSessionReference({ baseUrl: this.client.baseUrl, storage: this.storage, subscribeChanges: options.subscribeChanges });
     const tabId = commandTabId();
     this.browserCommandIdentity = typeof tabId === "string";
     this.commandScope = tabId ? `${this.client.baseUrl}:tab:${tabId}` : this.client.baseUrl;
@@ -92,27 +90,45 @@ export class BackendDispatchApi implements DispatchApi {
         return read;
       },
       readComparison: (sid, cid, signal) => this.readComparison(sid, cid, signal),
-      publishWorld: snapshot => { this.publish(snapshot); },
+      publishWorld: snapshot => {
+        const failure = this.snapshot?.backend?.error;
+        const recoveredObservation = failure && transientM3Error(new Member3Error(failure.code, failure.message));
+        this.publish(snapshot, Boolean(this.snapshot?.backend?.playbackConverging || recoveredObservation));
+      },
       publishComparison: view => { this.bindComparison(view); if (this.snapshot) this.publish(this.snapshot); },
       onError: error => { this.markStale(error); }, now: Date.now,
       schedule: (callback, ms) => { const timer = setTimeout(callback, ms); return () => clearTimeout(timer); },
       isVisible: () => typeof document === "undefined" || document.visibilityState !== "hidden",
       subscribeVisibility: callback => { if (typeof document === "undefined") return () => {}; document.addEventListener("visibilitychange", callback); return () => document.removeEventListener("visibilitychange", callback); }
     });
-    try {
-      const saved = JSON.parse(this.storage?.getItem(this.storageKey) ?? "null") as SessionPointer | null;
-      if (saved?.schemaVersion === 1) {
-        if (validSession(saved.session)) this.pointer.session = saved.session;
-        if (saved.comparison && typeof saved.comparison.id === "string" && saved.comparison.id.length > 0 && saved.session &&
-            parseBasis(saved.comparison.inputBasis).session_id === saved.session.session_id) this.pointer.comparison = saved.comparison;
-        if (saved.pending && /^S[0-4]$/.test(saved.pending.scenarioId) && typeof saved.pending.requestId === "string" && saved.pending.requestId.length > 0) this.pointer.pending = saved.pending;
-        if (typeof saved.previewJobId === "string") this.pointer.previewJobId = saved.previewJobId;
-      }
-    } catch { /* Invalid local pointer cannot become physical authority. */ }
+    this.pointer = this.reference.read() ?? { schemaVersion: 1 };
   }
   subscribe(listener: (snapshot: DispatchSnapshot) => void) {
-    this.listeners.add(listener); this.resumePolling();
-    return () => { this.listeners.delete(listener); if (!this.listeners.size) this.polling.stop(); };
+    this.listeners.add(listener);
+    this.stopReference ??= this.reference.subscribe(pointer => this.referenceChanged(pointer));
+    const saved = this.reference.read();
+    if (saved?.session && this.pointer.session && saved.session.session_id !== this.pointer.session.session_id) this.referenceChanged(saved);
+    this.resumePolling();
+    return () => { this.listeners.delete(listener); if (!this.listeners.size) { this.polling.stop(); this.stopReference?.(); this.stopReference = undefined; } };
+  }
+  private referenceChanged(pointer: SessionPointer | null) {
+    if (pointer?.session?.session_id === this.pointer.session?.session_id) return;
+    this.sessionEpoch++; this.polling.stop();
+    this.markStale(new Member3Error("SESSION_CHANGED", "Session reference changed; reading the server before enabling actions."));
+    if (!pointer?.session) { this.markStale(new Member3Error("SESSION_REFERENCE_UNAVAILABLE", "Session pointer was removed or invalid.")); return; }
+    this.pointer = { schemaVersion: 1, session: pointer.session };
+    this.comparison = undefined; this.forecasts.clear(); this.acceptances = [];
+    void this.enqueue(async () => {
+      const catalog = await this.ensureFoundation();
+      const session = this.pointer.session!;
+      if (session.build_sha256 !== this.runtimeBuildSha256 || session.catalog_sha256 !== catalog.catalog_sha256 || session.fixture_sha256 !== catalog.scenarios.find(s => s.scenario_id === session.scenario_id)?.fixture_sha256) throw new Member3Error("SESSION_BINDING_CHANGED", "Changed pointer belongs to a different runtime/catalog.");
+      const world = await this.readWorld(session, undefined, false);
+      await this.readAcceptances(session.session_id);
+      return this.publish(world, true);
+    }).catch(() => {});
+  }
+  private assertCurrent(session: M3Session, epoch = this.sessionEpoch) {
+    if (epoch !== this.sessionEpoch || session.session_id !== this.pointer.session?.session_id) throw new DOMException("Old session response ignored", "AbortError");
   }
   getSnapshot(): Promise<DispatchSnapshot> {
     // Share the initial read/load during React StrictMode's two mounts.
@@ -121,7 +137,7 @@ export class BackendDispatchApi implements DispatchApi {
   }
   private async currentWorld() {
     const pending = this.commands.read();
-    if (pending && ["accept", "apply_event"].includes(pending.operation) && pending.sessionId && pending.sessionId !== this.pointer.session?.session_id) {
+    if (pending && ["accept", "apply_event", "replay_step", "replay_start", "replay_speed", "replay_pause", "replay_reset"].includes(pending.operation) && pending.sessionId && pending.sessionId !== this.pointer.session?.session_id) {
       // The shared pointer can change in another tab; recover this command's owned session.
       const recovered = await this.client.session(pending.sessionId);
       if (!validSession(recovered) || recovered.session_id !== pending.sessionId || recovered.build_sha256 !== pending.inputBasis?.build_sha256) {
@@ -134,6 +150,7 @@ export class BackendDispatchApi implements DispatchApi {
     await this.ensureFoundation();
     if (this.pointer.pending) return this.performLoadScenario(this.pointer.pending.scenarioId);
     if (!this.pointer.session) return this.performLoadScenario("S0");
+    if (pending?.sessionId === this.pointer.session.session_id && pending.operation.startsWith("replay_")) return this.performReplay(pending.operation, pending.body.speed as PlaybackSpeed | undefined);
     await this.readWorld(this.pointer.session);
     if (pending?.sessionId === this.pointer.session.session_id) {
       if (pending.operation === "compare") return this.submitComparison();
@@ -158,6 +175,7 @@ export class BackendDispatchApi implements DispatchApi {
     return result;
   }
   private async performLoadScenario(id: ScenarioId): Promise<DispatchSnapshot> {
+    const epoch = this.sessionEpoch;
     if (this.commands.read()) throw new Member3Error("PENDING_COMMAND", "Resolve the pending backend command before changing session.");
     const catalog = await this.ensureFoundation();
     const scenario = catalog.scenarios.find((item) => item.scenario_id === id);
@@ -166,6 +184,7 @@ export class BackendDispatchApi implements DispatchApi {
     this.pointer.pending = pending;
     this.persist(); // Persist request identity before POST; ambiguous failures retry the same ID.
     const loaded = await this.client.loadScenario(id, pending.requestId);
+    if (epoch !== this.sessionEpoch) throw new DOMException("Old load response ignored", "AbortError");
     if (loaded.schema_version !== "saferoute-m3-loaded-session/1" || !validSession(loaded.session) || loaded.session.scenario_id !== id ||
         loaded.session.build_sha256 !== this.runtimeBuildSha256 || loaded.session.fixture_sha256 !== scenario.fixture_sha256 ||
         loaded.session.catalog_sha256 !== catalog.catalog_sha256 || loaded.execution_view?.basis?.session_id !== loaded.session.session_id) {
@@ -202,17 +221,23 @@ export class BackendDispatchApi implements DispatchApi {
     return this.foundation;
   }
   private async readWorld(session: M3Session, signal?: AbortSignal, publish = true): Promise<DispatchSnapshot> {
+    const epoch = this.sessionEpoch;
     for (let attempt = 0; attempt < 3; attempt++) {
       signal?.throwIfAborted();
       const state = await this.client.state(session.session_id, signal);
+      this.assertCurrent(session, epoch);
       const orders = await this.client.orders(session.session_id, signal);
       const vehicles = await this.client.vehicles(session.session_id, signal);
       const locations = await this.client.locations(session.session_id, signal);
       const events = await this.client.events(session.session_id, signal);
       const history = await this.client.replayHistory(session.session_id, signal);
+      const playback = await this.client.playback(session.session_id, signal);
+      this.assertCurrent(session, epoch);
       try {
         const snapshot = mapM3World(session, state, orders, vehicles, locations, this.client.baseUrl);
         bindPendingEvents(events, state);
+        if (!sameBasis(playback.execution_view.basis, state.basis) || playback.execution_view.current_time !== state.current_time) throw new Member3Error("STATE_CHANGED", "Playback world changed during read.");
+        snapshot.backend!.playback = playback;
         snapshot.backend!.pendingEvents = events;
         if (history.history.some(r => r.input_basis.build_sha256 !== session.build_sha256)) throw new Member3Error("INVALID_RESPONSE", "Replay history belongs to another build.");
         if (history.history.some(r => BigInt(r.input_basis.head_version) > BigInt(state.basis.head_version) || BigInt(r.input_basis.generation) > BigInt(state.basis.generation) ||
@@ -230,7 +255,7 @@ export class BackendDispatchApi implements DispatchApi {
   private persist(required = false) {
     try {
       if (required && !this.storage) throw new Error("Storage required");
-      this.storage?.setItem(this.storageKey, JSON.stringify(this.pointer));
+      if (this.storage) this.reference.write(this.pointer);
     } catch {
       if (required) throw new Member3Error("COMMAND_STORAGE_UNAVAILABLE", "Cannot persist the comparison reference; the original command remains available for recovery.");
       // Phase 1 read/load pointers keep their existing optional persistence behavior.
@@ -271,6 +296,7 @@ export class BackendDispatchApi implements DispatchApi {
     return this.submitComparison();
   }); }
   private async submitComparison(): Promise<DispatchSnapshot> {
+    const epoch = this.sessionEpoch;
     const session = this.pointer.session!, basis = this.snapshot!.backend!.basis;
     const existing = this.commands.read();
     if (existing && (existing.operation !== "compare" || existing.sessionId !== session.session_id)) throw new Member3Error("PENDING_COMMAND", "Another backend command needs reconciliation.");
@@ -289,6 +315,10 @@ export class BackendDispatchApi implements DispatchApi {
       throw error;
     }
     if (receipt.session_id !== session.session_id || receipt.mode !== "NEW_BATCH" || !pending.inputBasis || !sameBasis(receipt.input_basis, parseBasis(pending.inputBasis))) throw new Member3Error("INVALID_RESPONSE", "Comparison receipt differs from original intent basis.");
+    if (epoch !== this.sessionEpoch || session.session_id !== this.pointer.session?.session_id) {
+      // This original intent is confirmed; do not attach its historical group to the new session.
+      this.completeCommand(pending.requestId); throw new DOMException("Old comparison submission ignored", "AbortError");
+    }
     this.pointer.comparison = { id: receipt.comparison_id, inputBasis: receipt.input_basis }; this.persist(true);
     this.comparison = { schema_version: "saferoute-m3-profile-comparison/1", session_id: receipt.session_id, comparison_id: receipt.comparison_id, input_basis: receipt.input_basis,
       mode: receipt.mode, status: "QUEUED", jobs: receipt.profiles.map(profile => ({ profile, job_id: null, view: null })), outcome: null,
@@ -323,19 +353,25 @@ export class BackendDispatchApi implements DispatchApi {
     this.comparison = view;
   }
   private async readComparison(sid: string, cid: string, signal?: AbortSignal) {
+    const epoch = this.sessionEpoch;
     const view = await this.client.comparison(sid, cid, signal);
+    if (epoch !== this.sessionEpoch || sid !== this.pointer.session?.session_id) throw new DOMException("Old comparison ignored", "AbortError");
     const reference = this.pointer.comparison;
     if (!reference || view.comparison_id !== reference.id || !sameBasis(view.input_basis, reference.inputBasis)) throw new Member3Error("INVALID_RESPONSE", "Comparison binding changed.");
-    // The existing comparison lane owns forecast reads. Certified terminal jobs are immutable.
-    const forecasts = await Promise.all(view.jobs.filter(row => row.job_id && row.view?.plan_available && !this.forecasts.has(row.job_id))
-      .map(async row => {
-        const forecast = await this.client.jobForecast(sid, row.job_id!, signal);
-        if (forecast.profile !== row.profile || !sameBasis(forecast.input_basis, row.view!.input_basis) || !samePublicValue(forecast.job_view, row.view)) {
-          throw new Member3Error("INVALID_RESPONSE", "Forecast differs from certified comparison job.");
-        }
-        return forecast;
-      }));
+    // The SDK serializes bridge access. Bound this lane to one forecast read so
+    // three cold forecasts do not consume each other's server read deadlines.
+    const forecasts: M3JobForecast[] = [];
+    for (const row of view.jobs.filter(row => row.job_id && row.view?.plan_available && !this.forecasts.has(row.job_id))) {
+      signal?.throwIfAborted();
+      if (epoch !== this.sessionEpoch || sid !== this.pointer.session?.session_id) throw new DOMException("Old forecasts ignored", "AbortError");
+      const forecast = await this.client.jobForecast(sid, row.job_id!, signal);
+      if (forecast.profile !== row.profile || !sameBasis(forecast.input_basis, row.view!.input_basis) || !samePublicValue(forecast.job_view, row.view)) {
+        throw new Member3Error("INVALID_RESPONSE", "Forecast differs from certified comparison job.");
+      }
+      forecasts.push(forecast);
+    }
     signal?.throwIfAborted();
+    if (epoch !== this.sessionEpoch || sid !== this.pointer.session?.session_id) throw new DOMException("Old forecasts ignored", "AbortError");
     forecasts.forEach(forecast => this.forecasts.set(forecast.job_id, forecast));
     for (const row of view.jobs) {
       const forecast = row.job_id && this.forecasts.get(row.job_id);
@@ -346,6 +382,7 @@ export class BackendDispatchApi implements DispatchApi {
     return view;
   }
   private publish(snapshot: DispatchSnapshot, fresh = false): DispatchSnapshot {
+    if (snapshot.backend?.basis.session_id !== this.pointer.session?.session_id) throw new DOMException("Old world ignored", "AbortError");
     const oldError = fresh ? undefined : this.snapshot?.backend?.error;
     const mutationPending = Boolean(this.commands.read());
     const proposedAlternatives = oldError ? [] : (this.comparison?.jobs ?? []).flatMap(row => {
@@ -358,8 +395,8 @@ export class BackendDispatchApi implements DispatchApi {
     const selectedAlternativeId = proposedAlternatives.some(p => p.id === this.pointer.previewJobId) ? this.pointer.previewJobId! : null;
     const next: DispatchSnapshot = { ...snapshot, backend: { ...snapshot.backend!, scenarios: this.scenarios, comparison: this.comparison,
       jobs: Object.fromEntries((this.comparison?.jobs ?? []).flatMap(row => row.view ? [[row.view.job_id, row.view]] : [])),
-      stale: Boolean(oldError), error: oldError, mutationPending, acceptances: this.acceptances,
-      capabilities: forecastCapabilities(!oldError && !mutationPending) },
+      stale: Boolean(oldError || snapshot.backend?.playbackConverging), error: oldError, mutationPending, acceptances: this.acceptances,
+      capabilities: forecastCapabilities(!oldError && !snapshot.backend?.playbackConverging && !mutationPending) },
       planState: { ...snapshot.planState, proposedAlternatives, selectedAlternativeId } };
     this.snapshot = next;
     for (const listener of this.listeners) listener(next);
@@ -395,7 +432,9 @@ export class BackendDispatchApi implements DispatchApi {
     return this.acceptFlight;
   }
   private async readAcceptances(sid: string) {
+    const epoch = this.sessionEpoch;
     const audit = await this.client.acceptances(sid);
+    if (epoch !== this.sessionEpoch || sid !== this.pointer.session?.session_id) throw new DOMException("Old audit ignored", "AbortError");
     if (audit.acceptances.some(r => r.input_basis.build_sha256 !== this.pointer.session?.build_sha256)) throw new Member3Error("INVALID_RESPONSE", "Acceptance history belongs to another build.");
     this.acceptances = audit.acceptances;
   }
@@ -474,6 +513,86 @@ export class BackendDispatchApi implements DispatchApi {
     return this.publish(world, true);
   }
   setUrgentOrderEnabled(_enabled: boolean) { return this.unsupported(); }
+  replayStep() { return this.replayCommand("replay_step"); }
+  replayStart(speed: PlaybackSpeed = 1) { return this.replayCommand("replay_start", speed); }
+  replaySpeed(speed: PlaybackSpeed) { return this.replayCommand("replay_speed", speed); }
+  replayPause() { return this.replayCommand("replay_pause"); }
+  resetSession() { return this.replayCommand("replay_reset"); }
+  private replayCommand(operation: string, speed?: PlaybackSpeed): Promise<DispatchSnapshot> {
+    if (["replay_start", "replay_speed"].includes(operation) && !validSpeed(speed)) return Promise.reject(new Member3Error("INVALID_SPEED", "Playback speed must be 1, 2, 4 or 8."));
+    if (this.replayFlight) return this.replayFlight.operation === operation && this.replayFlight.speed === speed ? this.replayFlight.promise : Promise.reject(new Member3Error("PENDING_COMMAND", "Another replay command is pending."));
+    const pending = this.commands.read();
+    if (pending && (pending.operation !== operation || pending.body.speed !== speed)) return Promise.reject(new Member3Error("PENDING_COMMAND", "Retry the original pending command."));
+    const controllerOnly = ["replay_pause", "replay_speed"].includes(operation) && this.snapshot && canControlPlayback(this.snapshot) && this.snapshot.backend!.basis.session_id === this.pointer.session?.session_id;
+    if (!pending && (this.queuedOperations || !controllerOnly && (!this.snapshot?.backend || this.snapshot.backend.stale || !this.snapshot.backend.capabilities?.replay))) return Promise.reject(new Member3Error("REPLAY_UNAVAILABLE", "Refresh the owned server session before replay."));
+    const promise = this.enqueue(() => this.performReplay(operation, speed)).finally(() => { this.replayFlight = undefined; });
+    this.replayFlight = { operation, speed, promise }; return promise;
+  }
+  private async performReplay(operation: string, speed?: PlaybackSpeed): Promise<DispatchSnapshot> {
+    const epoch = this.sessionEpoch;
+    const session = this.pointer.session;
+    if (!session) throw new Member3Error("REPLAY_UNAVAILABLE", "No owned server session is loaded.");
+    const existing = this.commands.read();
+    if (existing && (existing.sessionId !== session.session_id || existing.operation !== operation)) throw new Member3Error("PENDING_COMMAND", "Resolve the original intent.");
+    if (!existing && !["replay_pause", "replay_speed"].includes(operation)) {
+      await this.readWorld(session);
+      const backend = this.snapshot!.backend!, controller = backend.playback!;
+      if (["replay_step", "replay_start"].includes(operation) && (!backend.executionView.active_job_id || !controller.fully_paused || backend.pendingEvents?.events.some(e => e.apply_allowed))) throw new Member3Error("REPLAY_UNAVAILABLE", "Accept a plan, settle Pause and Apply any due event before replay.");
+      if (operation === "replay_reset" && !controller.fully_paused) throw new Member3Error("REPLAY_UNAVAILABLE", "Pause and wait for the reserved tick to settle before Reset.");
+    }
+    const basis = existing?.inputBasis ?? this.snapshot!.backend!.basis;
+    const body = existing?.body ?? { ...(["replay_step", "replay_start"].includes(operation) ? { expected_revision: expectedRevision(basis) } : {}), ...(speed === undefined ? {} : { speed }) };
+    const pending = this.beginCommand({ operation, sessionId: session.session_id, body, inputBasis: basis });
+    const expectedBody = { ...(["replay_step", "replay_start"].includes(operation) ? { expected_revision: expectedRevision(parseBasis(basis)) } : {}), ...(speed === undefined ? {} : { speed }) };
+    if (basis.session_id !== session.session_id || basis.build_sha256 !== session.build_sha256 || !samePublicValue(body, expectedBody) || speed !== undefined && !validSpeed(speed)) throw new Member3Error("INVALID_RESPONSE", "Stored replay intent is invalid.");
+    if (this.snapshot) this.publish(this.snapshot);
+    let result;
+    try {
+      result = await this.retryCommand<M3PlaybackControl | M3ReplayMutationView | M3ReplayReset>(() => {
+        const requestId = pending.requestId;
+        if (operation === "replay_step") return this.client.step(session.session_id, { request_id: requestId, expected_revision: expectedRevision(basis) });
+        if (operation === "replay_start") return this.client.startPlayback(session.session_id, { request_id: requestId, expected_revision: expectedRevision(basis), speed: speed! });
+        if (operation === "replay_speed") return this.client.setPlaybackSpeed(session.session_id, { request_id: requestId, speed: speed! });
+        if (operation === "replay_pause") return this.client.pausePlayback(session.session_id, requestId);
+        if (operation === "replay_reset") return this.client.resetReplay(session.session_id, requestId);
+        throw new Member3Error("INVALID_RESPONSE", "Unknown stored replay operation.");
+      });
+    } catch (error) {
+      if (error instanceof Member3Error && error.status === 409 && ["STALE_HEAD", "ACCEPTED_PLAN_REQUIRED", "ACCEPTED_TRAJECTORY_REQUIRED", "PLAN_COMPLETE", "EVENT_TRANSITION_REQUIRED", "PLAYBACK_TICK_IN_PROGRESS", "TIME_REWIND"].includes(error.code)) {
+        this.completeCommand(pending.requestId); await this.readWorld(session);
+      }
+      throw error;
+    }
+    this.assertCurrent(session, epoch);
+    if (result.schema_version === "saferoute-m3-playback-control/1") {
+      // Acknowledged controller metadata is durable independently of later world-read convergence.
+      this.completeCommand(pending.requestId);
+      const previous = this.snapshot;
+      if (!previous) {
+        // Reload recovery has no last confirmed world to render. The command is
+        // already settled; later read failures must lead to GET, never a new POST.
+        const world = await this.readWorld(session, undefined, false);
+        await this.readAcceptances(session.session_id);
+        return this.publish(world, true);
+      }
+      return this.publish({ ...previous, backend: { ...previous.backend!, playbackConverging: true,
+        playback: { ...result.controller, schema_version: "saferoute-m3-playback-controller/1", execution_view: previous.backend!.executionView } } }, true);
+    }
+    let destination = session;
+    if (operation === "replay_reset") {
+      const reset = result as M3ReplayReset;
+      if (reset.session.scenario_id !== session.scenario_id || reset.session.fixture_sha256 !== session.fixture_sha256 || reset.session.catalog_sha256 !== session.catalog_sha256) throw new Member3Error("INVALID_RESPONSE", "Reset changed fixture/catalog binding.");
+      destination = reset.session;
+      this.pointer = { schemaVersion: 1, session: destination }; this.comparison = undefined; this.forecasts.clear(); this.acceptances = []; this.persist(true);
+      // The validated Reset receipt and new pointer are durable. A later GET
+      // failure must recover by observing this destination, not replaying Reset.
+      this.completeCommand(pending.requestId);
+    } else if (operation === "replay_step" && result.schema_version === "saferoute-m3-replay-view/1" && !sameBasis(result.receipt.input_basis, basis)) throw new Member3Error("INVALID_RESPONSE", "Step receipt differs from original full basis.");
+    const world = await this.readWorld(destination, undefined, false);
+    await this.readAcceptances(destination.session_id);
+    this.completeCommand(pending.requestId);
+    return this.publish(world, true);
+  }
   pickupOrder(_input: { vehicleId: string; orderId: string }) { return this.unsupported(); }
   deliverOrder(_input: { vehicleId: string; orderId: string }) { return this.unsupported(); }
   advanceDemoClock(_minutes: number) { return this.unsupported(); }
